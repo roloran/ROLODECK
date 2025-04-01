@@ -142,8 +142,8 @@ Provisioned devices dump parts of their configuration (e.g., LoRa parameters, RD
   - `RDCPPING` sends an RDCP Echo Request message to another device, e.g., `RDCPPING 0200`.
   - `RDCPTEST` sends an RDCP Test message to a given RDCP address, e.g., `RDCPTEST FFFF Hello world`.
   - `RDCPCIRE` sends an RDCP Citizen Request message to the HQ. Subtype and ReferenceNumber must be given along with a text in the format that the HQ expects, e.g., `RDCPCIRE 00 0001 !#...`.
-  - `RDCKACKS` sends a signed Acknowledgment message; this only works if a private key is stored on the device. The command expects Origin, Destination, acknowledged SequenceNumber, and Acknowledgment type as parameters. Note that usually only the HQ sends such messages and the HQ's private key must not be stored on end-user devices.
-  - `RDCKACK` sends an (unsigned) Acknowledgment message; same as `RDCKACKS` but without the Schnorr signature. Note that usually only DAs send such acknowledgments.
+  - `RDCPACKS` sends a signed Acknowledgment message; this only works if a private key is stored on the device. The command expects Origin, Destination, acknowledged SequenceNumber, and Acknowledgment type as parameters. Note that usually only the HQ sends such messages and the HQ's private key must not be stored on end-user devices.
+  - `RDCPACK` sends an (unsigned) Acknowledgment message; same as `RDCPACKS` but without the Schnorr signature. Note that usually only DAs send such acknowledgments.
   - `RDCPTIME` sends a signed Timestamp message to the broadcast address, e.g., `RDCPTIME 00 12 31 23 59 02` (see RDCP specs). Note that usually only the HQ sends such messages and other devices only accept it if properly signed.
 
 - Other device settings:
