@@ -1,0 +1,14 @@
+#ifndef _SETTINGS_SCENARIO
+#define _SETTINGS_SCENARIO
+
+#define OUR_RDCP_ADDRESS_DA_NEUHAUS    0x0200
+#define OUR_RDCP_ADDRESS_DA_ILLMITZENA 0x0201
+#define OUR_RDCP_ADDRESS_DA_ILLMITZEN1 0x0202
+#define OUR_RDCP_ADDRESS_DA_MOTSCHULA  0x0203
+#define OUR_RDCP_ADDRESS_DA_PUDLACH    0x0204
+
+// Buffer time in ms for each sending/relaying timeslot
+#define OUR_RDCP_TIMESLOT_BUFFER 1000
+
+#endif
+/* EOF */
