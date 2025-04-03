@@ -35,6 +35,7 @@ Via `Arduino IDE`, the following dependencies can be installed:
 
 - GFX Library for Arduino by Moon On Our Nation, v1.5.6
 - Crypto by Rhys Weatherley, v0.4.0
+- ESP8266Audio, v2.0.0
 
 Additionally, our implementation needs the [Unishox2 library](https://github.com/siara-cc/Unishox_Arduino_lib), which we forked [here](https://github.com/roloran/Unishox_Arduino_lib) and the SX126x-Arduino library, which we forked [here](https://github.com/roloran/SX126x-Arduino) including some SPI-handling patches.
 
