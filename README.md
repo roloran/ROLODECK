@@ -32,6 +32,14 @@ Several libraries related to T-Deck hardware components are used as provided in 
 Copy them to the directory where Arduino IDE installs libraries. We keep a tested fork of LilyGo's repository [here](https://github.com/roloran/LilyGO-T-Deck).
 Next, for lvgl, a file must be created, which is stored in the library lvgl as .template. Insert this file in the library directory of the Arduino IDE.
 
+```
+.
+├── ...
+├── libraries # Arduino Library
+│ ├── lvgl # lvgl library folder
+│ ├── lv_conf.h (insert the template file from lvgl library folder and rename it)
+└── ...
+```
 Via `Arduino IDE`, the following dependencies can be installed:
 
 - GFX Library for Arduino by Moon On Our Nation, v1.5.6
@@ -48,7 +56,7 @@ When all dependencies are met, the firmware can be compiled using `Arduino CLI` 
 arduino-cli compile -v --fqbn "esp32:esp32:esp32s3:CDCOnBoot=cdc,FlashSize=16M,PartitionScheme=app3M_fat9M_16MB" --output-dir build ./
 ```
 
-Flashing the firmware can be done afterwards as follows:
+Flashing the firmware can be done afterward as follows:
 
 ```bash
 DEVICE="/dev/your-t-deck-device-here"
