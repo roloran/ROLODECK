@@ -30,7 +30,7 @@ Several libraries related to T-Deck hardware components are used as provided in 
 - lvgl (8.4.0)
 
 Copy them to the directory where Arduino IDE installs libraries. We keep a tested fork of LilyGo's repository [here](https://github.com/roloran/LilyGO-T-Deck).
-Next, for lvgl, a file must be created, which is stored in the library lvgl as .template. Insert this file in the library directory of the Arduino IDE.
+The lv_conf.h file should be as indicated below, which is stored in the library lvgl as a .template file. Insert this file in the library directory of the Arduino IDE.
 
 ```
 .
