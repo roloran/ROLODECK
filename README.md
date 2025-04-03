@@ -35,10 +35,9 @@ Next, for lvgl, a file must be created, which is stored in the library lvgl as .
 .
 ├── ...
 ├── libraries # Arduino Library
-│ ├── lvgl # lvgl library folder
-│ ├── lv_conf.h (insert the template file from lvgl library folder and rename it)
+│   ├── lvgl # lvgl library folder
+│   ├── lv_conf.h (insert the template file from lvgl library folder and rename it)
 └── ...
-
 
 Via `Arduino IDE`, the following dependencies can be installed:
 
