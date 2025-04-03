@@ -35,7 +35,7 @@ Next, for lvgl, a file must be created, which is stored in the library lvgl as .
 ```
 .
 ├── ...
-├── libraries # Arduino Library
+├── libraries # Arduino library folder
 │ ├── lvgl # lvgl library folder
 │ ├── lv_conf.h (insert the template file from lvgl library folder and rename it)
 └── ...
