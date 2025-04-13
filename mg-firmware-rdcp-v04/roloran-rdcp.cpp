@@ -1284,6 +1284,7 @@ void rdcp_cire_ack(uint16_t origin, uint16_t confirmedseqnr, uint8_t acktype)
       char gui_text[512];
       snprintf(gui_text, 512, "WICHTIG: Ihre Meldung %04X-%d kann nicht verarbeitet werden, da die Infrastruktur nicht im Krisen-Betriebsmodus ist. Falls Sie Hilfe brauchen, kontaktieren Sie Rettungsdienste oder die Gemeinde bitte anderweitig.", getMyRDCPAddress(), cire_current_refnr);
       mb_add_local_message(gui_text, cire_current_refnr, ++cire_guitext_num, 60002, true);
+      mb_add_local_message(gui_text, cire_current_refnr, ++cire_guitext_num, 60002, false); // Add message to both crisis and non-crisis screen
       gui_enable_cire_buttons();
       gui_transition_to_screen(SCREEN_OANONCRISIS);
     }
@@ -1324,6 +1325,7 @@ void rdcp_cire_ack(uint16_t origin, uint16_t confirmedseqnr, uint8_t acktype)
       char gui_text[512];
       snprintf(gui_text, 512, "WICHTIG: Ihre Meldung %04X-%d wurde an die Gemeinde geschickt, kann aber nicht verarbeitet werden, da die Infrastruktur derzeit nicht im Krisen-Betriebsmodus ist. Falls Sie Hilfe brauchen, kontaktieren Sie Rettungsdienste oder die Gemeinde bitte anderweitig.", getMyRDCPAddress(), cire_current_refnr);
       mb_add_local_message(gui_text, cire_current_refnr, ++cire_guitext_num, 60002, true);
+      mb_add_local_message(gui_text, cire_current_refnr, ++cire_guitext_num, 60002, false); // Add message to both crisis and non-crisis screen
       gui_transition_to_screen(SCREEN_OANONCRISIS);
     }
     else if (acktype == RDCP_ACKNOWLEDGMENT_POSNEG)
