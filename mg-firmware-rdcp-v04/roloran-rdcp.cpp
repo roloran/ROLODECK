@@ -734,11 +734,26 @@ int get_num_txaq_entries(void)
   return txaq.num_entries;
 }
 
+uint8_t txq_overrun_counter = 0;
+
 bool rdcp_txqueue_add(uint8_t *data, uint8_t len, bool important, bool force_tx, uint8_t callback_selector, int64_t forced_time=0)
 {
   if (txq.num_entries == MAX_TXQUEUE_ENTRIES)
   {
     serial_writeln("WARNING: rdcp_txqueue_add() failed -- TX Queue is full");
+    txq_overrun_counter++;
+    if (txq_overrun_counter > 20)
+    {
+      serial_writeln("WARNING: Continuous TXQ overflow, applying counter-measures");
+      txq_overrun_counter = 0;
+      radio_apply_new_configuration();
+      for (int i=0; i < MAX_TXQUEUE_ENTRIES; i++) txq.entries[i].cad_retry = 0;
+      if (tx_ongoing != -1)
+      {
+        txq.entries[tx_ongoing].in_process = false;
+        tx_ongoing = -1;
+      }
+    }
     return false;
   }
 
