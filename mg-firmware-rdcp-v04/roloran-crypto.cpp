@@ -44,8 +44,16 @@ bool schnorr_init_ctx(void)
 {
   if (ssc_initialized) return true;
 
+  /*
   ssc = SchnorrSigCtx();
   int res = ssc.init();
+  */
+  size_t seed_len = MBEDTLS_CTR_DRBG_MAX_SEED_INPUT - MBEDTLS_CTR_DRBG_ENTROPY_LEN;
+  uint8_t seed[seed_len];    
+  esp_fill_random(seed, seed_len);
+
+  ssc = SchnorrSigCtx();
+  int res = ssc.init(seed, seed_len);
   if (res != 0)
   {
     serial_writeln("ERROR: schnorr_init_ctx() failed");
