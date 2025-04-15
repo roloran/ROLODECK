@@ -1,0 +1,9 @@
+*.rterm
+*.done
+aeskey-*
+run.sh
+upload.sh
+device-template*
+schnorr.*
+.lora_*
+build/*

@@ -1284,6 +1284,7 @@ void rdcp_cire_ack(uint16_t origin, uint16_t confirmedseqnr, uint8_t acktype)
       char gui_text[512];
       snprintf(gui_text, 512, "WICHTIG: Ihre Meldung %04X-%d kann nicht verarbeitet werden, da die Infrastruktur nicht im Krisen-Betriebsmodus ist. Falls Sie Hilfe brauchen, kontaktieren Sie Rettungsdienste oder die Gemeinde bitte anderweitig.", getMyRDCPAddress(), cire_current_refnr);
       mb_add_local_message(gui_text, cire_current_refnr, ++cire_guitext_num, 60002, true);
+      mb_add_local_message(gui_text, cire_current_refnr, ++cire_guitext_num, 60002, false); // Add message to both crisis and non-crisis screen
       gui_enable_cire_buttons();
       gui_transition_to_screen(SCREEN_OANONCRISIS);
     }
@@ -1324,6 +1325,7 @@ void rdcp_cire_ack(uint16_t origin, uint16_t confirmedseqnr, uint8_t acktype)
       char gui_text[512];
       snprintf(gui_text, 512, "WICHTIG: Ihre Meldung %04X-%d wurde an die Gemeinde geschickt, kann aber nicht verarbeitet werden, da die Infrastruktur derzeit nicht im Krisen-Betriebsmodus ist. Falls Sie Hilfe brauchen, kontaktieren Sie Rettungsdienste oder die Gemeinde bitte anderweitig.", getMyRDCPAddress(), cire_current_refnr);
       mb_add_local_message(gui_text, cire_current_refnr, ++cire_guitext_num, 60002, true);
+      mb_add_local_message(gui_text, cire_current_refnr, ++cire_guitext_num, 60002, false); // Add message to both crisis and non-crisis screen
       gui_transition_to_screen(SCREEN_OANONCRISIS);
     }
     else if (acktype == RDCP_ACKNOWLEDGMENT_POSNEG)
@@ -2125,32 +2127,21 @@ void rdcp_mg_process_blockalert(void)
   valid = schnorr_verify_signature(sha, 32, sig);
   if (valid)
   {
-    uint16_t nonce = rdcp_msg_in.payload.data[0] + 256 * rdcp_msg_in.payload.data[1];
+    uint16_t targetdevice = rdcp_msg_in.payload.data[0] + 256 * rdcp_msg_in.payload.data[1];
+    uint16_t duration = rdcp_msg_in.payload.data[2] + 256 * rdcp_msg_in.payload.data[3];
 
-    if (!persistence_checkset_nonce("rstdev", nonce))
+    if (targetdevice == getMyRDCPAddress())
     {
-      serial_writeln("WARNING: Invalid nonce received for signed RDCP BLOCK ALERT");
-      return;
-    }
-    else
-    {
-      uint16_t targetdevice = rdcp_msg_in.payload.data[0] + 256 * rdcp_msg_in.payload.data[1];
-      uint16_t duration = rdcp_msg_in.payload.data[2] + 256 * rdcp_msg_in.payload.data[3];
-
-      if (targetdevice == getMyRDCPAddress())
+      if (duration > 0)
       {
-        if (duration > 0)
-        {
-          serial_writeln("INFO: BLOCK DEVICE ALERT affects this device, restricting usage");
-          rdcp_blockdevice_lock(duration);
-        }
-        else
-        {
-          serial_writeln("INFO: BLOCK DEVICE lifted by HQ");
-          rdcp_blockdevice_unlock();
-        }
+        serial_writeln("INFO: BLOCK DEVICE ALERT affects this device, restricting usage");
+        rdcp_blockdevice_lock(duration);
       }
-
+      else
+      {
+        serial_writeln("INFO: BLOCK DEVICE lifted by HQ");
+        rdcp_blockdevice_unlock();
+      }
     }
   }
   else

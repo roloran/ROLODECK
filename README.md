@@ -30,11 +30,21 @@ Several libraries related to T-Deck hardware components are used as provided in 
 - lvgl (8.4.0)
 
 Copy them to the directory where Arduino IDE installs libraries. We keep a tested fork of LilyGo's repository [here](https://github.com/roloran/LilyGO-T-Deck).
+The lv_conf.h file should be placed as indicated below, which is stored in the library lvgl as a .template file. Insert this file in the library directory of the Arduino IDE.
 
+```
+.
+├── ...
+├── libraries # Arduino library folder
+│ ├── lvgl # lvgl library folder
+│ ├── lv_conf.h (insert the template file from lvgl library folder and rename it)
+└── ...
+```
 Via `Arduino IDE`, the following dependencies can be installed:
 
 - GFX Library for Arduino by Moon On Our Nation, v1.5.6
 - Crypto by Rhys Weatherley, v0.4.0
+- ESP8266Audio, v2.0.0
 
 Additionally, our implementation needs the [Unishox2 library](https://github.com/siara-cc/Unishox_Arduino_lib), which we forked [here](https://github.com/roloran/Unishox_Arduino_lib) and the SX126x-Arduino library, which we forked [here](https://github.com/roloran/SX126x-Arduino) including some SPI-handling patches.
 
@@ -46,7 +56,7 @@ When all dependencies are met, the firmware can be compiled using `Arduino CLI` 
 arduino-cli compile -v --fqbn "esp32:esp32:esp32s3:CDCOnBoot=cdc,FlashSize=16M,PartitionScheme=app3M_fat9M_16MB" --output-dir build ./
 ```
 
-Flashing the firmware can be done afterwards as follows:
+Flashing the firmware can be done afterward as follows:
 
 ```bash
 DEVICE="/dev/your-t-deck-device-here"
@@ -142,8 +152,8 @@ Provisioned devices dump parts of their configuration (e.g., LoRa parameters, RD
   - `RDCPPING` sends an RDCP Echo Request message to another device, e.g., `RDCPPING 0200`.
   - `RDCPTEST` sends an RDCP Test message to a given RDCP address, e.g., `RDCPTEST FFFF Hello world`.
   - `RDCPCIRE` sends an RDCP Citizen Request message to the HQ. Subtype and ReferenceNumber must be given along with a text in the format that the HQ expects, e.g., `RDCPCIRE 00 0001 !#...`.
-  - `RDCKACKS` sends a signed Acknowledgment message; this only works if a private key is stored on the device. The command expects Origin, Destination, acknowledged SequenceNumber, and Acknowledgment type as parameters. Note that usually only the HQ sends such messages and the HQ's private key must not be stored on end-user devices.
-  - `RDCKACK` sends an (unsigned) Acknowledgment message; same as `RDCKACKS` but without the Schnorr signature. Note that usually only DAs send such acknowledgments.
+  - `RDCPACKS` sends a signed Acknowledgment message; this only works if a private key is stored on the device. The command expects Origin, Destination, acknowledged SequenceNumber, and Acknowledgment type as parameters. Note that usually only the HQ sends such messages and the HQ's private key must not be stored on end-user devices.
+  - `RDCPACK` sends an (unsigned) Acknowledgment message; same as `RDCPACKS` but without the Schnorr signature. Note that usually only DAs send such acknowledgments.
   - `RDCPTIME` sends a signed Timestamp message to the broadcast address, e.g., `RDCPTIME 00 12 31 23 59 02` (see RDCP specs). Note that usually only the HQ sends such messages and other devices only accept it if properly signed.
 
 - Other device settings:
