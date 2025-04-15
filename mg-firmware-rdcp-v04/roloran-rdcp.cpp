@@ -136,6 +136,9 @@ bool rdcp_check_crc_in(uint8_t real_packet_length)
   return false;
 }
 
+uint16_t most_recent_origin = 0x0000;
+uint16_t most_recent_seqnr  = 0x0000;
+
 bool rdcp_mg_process_rxed_lora_packet(uint8_t *lora_packet, uint16_t lora_packet_length, int64_t lora_packet_timestamp)
 {
   /* Check whether it could be an RDCP message at all */
@@ -196,10 +199,25 @@ bool rdcp_mg_process_rxed_lora_packet(uint8_t *lora_packet, uint16_t lora_packet
        *     This is not implemented here for T-Deck MGs, because even if we operate as a mobile 868 MHz Relay, we can
        *     arrange for that when first receiving the RDCP Message (there are no "3 waves of relays" on the 868 MHz channel).
        */
-      return false;
+      /*
+        For now, we accept duplicated OAs and Signatures as the Message Board can handle them properly.
+      */
+      if (
+          (
+            (rdcp_msg_in.header.message_type != RDCP_MSGTYPE_OFFICIAL_ANNOUNCEMENT) && 
+            (rdcp_msg_in.header.message_type != RDCP_MSGTYPE_SIGNATURE)
+          )
+          ||
+          (
+            (rdcp_msg_in.header.origin == most_recent_origin) &&
+            (rdcp_msg_in.header.sequence_number == most_recent_seqnr)
+          )
+        ) return false;
     }
   }
 
+  most_recent_origin = rdcp_msg_in.header.origin; 
+  most_recent_seqnr  = rdcp_msg_in.header.sequence_number;
   rdcp_mg_process_incoming_message();
 
   return true;
