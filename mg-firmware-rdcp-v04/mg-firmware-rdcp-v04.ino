@@ -33,7 +33,7 @@
 
 #include <Arduino.h>
 #include <esp_timer.h>
-#include <lvgl.h> 
+#include <lvgl.h>
 
 #include "roloran-tdeck-serial.h"       // Serial/UART communication
 #include "roloran-tdeck-hal.h"          // T-Deck hardware-related functions
@@ -59,9 +59,13 @@ bool provisioned = false; // has the device already been provisioned?
 extern bool has_txed;
 
 int64_t minutetimer = -1; // track milliseconds so we execute some tasks only about once per minute
+int32_t old_free_heap = ESP.getFreeHeap();
+int32_t old_min_free_heap = ESP.getMinFreeHeap();
+int32_t free_heap = 0;
+int32_t min_free_heap = 0;
 
 /**
- * setup() function, called once after device power-on. 
+ * setup() function, called once after device power-on.
  * Initializes the T-Deck hardware components (order is relevant) and retrieves
  * persistenly stored configuration and data.
  */
@@ -90,7 +94,7 @@ void setup(void)
 }
 
 /**
- * main loop() function, executed over and over again. 
+ * main loop() function, executed over and over again.
  */
 void loop(void)
 {
@@ -111,7 +115,7 @@ void loop(void)
       {
         gui_transition_to_screen(SCREEN_EULA); // Default screen on start-up
       }
-      else 
+      else
       {
         gui_transition_to_screen(SCREEN_OACRISIS); // Directly go to OA CRISIS screen if no EULA is shown
       }
@@ -119,7 +123,7 @@ void loop(void)
       tdeck_loop();
       serial_banner();  // Output current device configuration over Serial
       mb_count_and_show_last(true, true); // Display latest message board entry if available
-      tdeck_loop(); 
+      tdeck_loop();
       mb_check_lifetime_and_update_display(true, true); // Check expiration dates
     }
     else
@@ -172,6 +176,24 @@ void loop(void)
     minutetimer = my_millis();
     if (is_screensaver_on()) mb_check_lifetime_and_update_display(true, true); // lifetime check blocks device for several seconds, only do it with screensaver on
     rdcp_blockdevice_check();
+
+    free_heap = ESP.getFreeHeap();
+    min_free_heap = ESP.getMinFreeHeap();
+    if ((free_heap < old_free_heap) || (min_free_heap < old_min_free_heap))
+    {
+      char info[256];
+      snprintf(info, 256, "WARNING: Free heap dropped from %d/%d to %d/%d",
+        old_min_free_heap, old_free_heap, min_free_heap, free_heap);
+      serial_writeln(info);
+      old_min_free_heap = min_free_heap;
+      old_free_heap = free_heap;
+      if (free_heap < 32768)
+      {
+        serial_writeln("ERROR: OUT OF MEMORY - restarting as countermeasure");
+        delay(1000);
+        ESP.restart();
+      }
+    }
   }
 
   return;
