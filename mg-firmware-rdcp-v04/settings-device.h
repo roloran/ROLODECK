@@ -230,7 +230,7 @@ void updateRoamingTable(uint16_t da, int16_t rssi);
  * @param timeframe Number of milliseconds of the oldest relevant roaming table entry 
  * @return RDCP Address of the recommended RDCP Entry Point when roaming 
  */
-uint16_t getRoamingRecommendation(uint16_t timeframe);
+uint16_t getRoamingRecommendation(uint32_t timeframe);
 
 /**
  * Get a recommendation for an entry point to use.

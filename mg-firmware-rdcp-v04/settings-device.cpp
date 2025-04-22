@@ -272,12 +272,13 @@ void updateRoamingTable(uint16_t da, int16_t rssi)
       roamingTable[i].da = da;
       roamingTable[i].rssi = rssi;
       roamingTable[i].timestamp = my_millis();
+      break;
     }
   }
   return;
 }
 
-uint16_t getRoamingRecommendation(uint16_t timeframe = 1000*60*5)
+uint16_t getRoamingRecommendation(uint32_t timeframe = 1000*60*5)
 {
   int index = -1;
   int64_t now = my_millis();

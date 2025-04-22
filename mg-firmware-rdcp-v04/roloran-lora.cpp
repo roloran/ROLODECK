@@ -237,7 +237,7 @@ void radio_loop()
   if (has_timeout_tx == true)
   {
     has_timeout_tx = false;
-    serial_writeln("WARNING: LoRa TX timeout. Retrying.");
+    serial_writeln("WARNING: LoRa TX_timeout. Retrying.");
     radio_apply_new_configuration(); // Re-initalize the radio
     startReceiveMode();
     has_message_to_send = true;
@@ -248,7 +248,7 @@ void radio_loop()
   {
     has_timeout_rx = false;
     has_error_rx = false;
-    serial_writeln("WARNING: LoRa RX timeout.");
+    serial_writeln("WARNING: LoRa RX_timeout.");
     radio_apply_new_configuration(); // Re-initalize the radio
     startReceiveMode();
   }
