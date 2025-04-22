@@ -740,7 +740,7 @@ bool rdcp_txqueue_add(uint8_t *data, uint8_t len, bool important, bool force_tx,
 {
   if (txq.num_entries == MAX_TXQUEUE_ENTRIES)
   {
-    serial_writeln("WARNING: rdcp_txqueue_add() failed -- TX Queue is full");
+    serial_writeln("WARNING: rdcp_txqueue_add() failed -- TXQ is full");
     txq_overrun_counter++;
     if (txq_overrun_counter > 20)
     {
@@ -803,6 +803,7 @@ bool rdcp_txqueue_reschedule(int64_t offset=0)
   int64_t delta = CFEst - now; // - CFEst_old;
   bool dropped = false;
 
+  if (delta < 0) delta = 0;
   if (offset != 0) delta = offset;
 
   for (int i=0; i < MAX_TXQUEUE_ENTRIES; i++)
@@ -813,7 +814,10 @@ bool rdcp_txqueue_reschedule(int64_t offset=0)
       if (txq.entries[i].force_tx) continue;
 
       txq.entries[i].num_of_reschedules++;
-      txq.entries[i].currently_scheduled_time += delta;
+      if (txq.entries[i].currently_scheduled_time < CFEst + delta)
+      {
+        txq.entries[i].currently_scheduled_time = CFEst + delta + i;
+      }
 
       if (txq.entries[i].currently_scheduled_time < now)
       {
@@ -902,7 +906,7 @@ bool rdcp_txaheadqueue_add(uint8_t *data, uint8_t len, bool important, bool forc
 {
   if (txaq.num_entries == MAX_TXAHEADQUEUE_ENTRIES)
   {
-    serial_writeln("WARNING: rdcp_txaheadqueue_add() failed -- TX Ahead Queue is full");
+    serial_writeln("WARNING: rdcp_txaheadqueue_add() failed -- TXAQ is full");
     return false;
   }
 
@@ -1005,6 +1009,11 @@ void rdcp_send_message_cad(void)
 
 bool rdcp_send_message_force(void)
 {
+  if (tx_ongoing == -1)
+  {
+    serial_writeln("WARNING: rdcp_send_message_force() called with no tx_ongoing");
+    return false;
+  }
   int64_t now = my_millis();
   int64_t timediff = now - txq.entries[tx_ongoing].currently_scheduled_time - retransmission_count * (airtime_in_ms(txq.entries[tx_ongoing].payload_length) + 1000);
   char buf[256];
@@ -1027,6 +1036,12 @@ bool rdcp_send_message_force(void)
 void rdcp_callback_txfin(void)
 {
   char buf[256];
+
+  if (tx_ongoing == -1)
+  {
+    serial_writeln("WARNING: rdcp_callback_txfin() without tx_ongoing");
+    return;
+  }
 
   last_tx_activity = my_millis();
 
