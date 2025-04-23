@@ -837,6 +837,7 @@ bool rdcp_txqueue_reschedule(int64_t offset=0)
       {
           if (txq.entries[i].in_process) continue;
           if (txq.entries[i].force_tx) continue;
+          if (!txq.entries[i].waiting) continue;
           if (txq.entries[i].currently_scheduled_time  < next_timestamp) 
             next_timestamp = txq.entries[i].currently_scheduled_time;
       }
