@@ -1651,6 +1651,8 @@ void set_grace_period(int64_t new_grace)
   return;
 }
 
+uint16_t highest_oa_refnr = 0;
+
 void rdcp_heartbeat_send(void)
 {
   serial_writeln("INFO: Sending HEARTBEAT message for this device");
@@ -1663,22 +1665,30 @@ void rdcp_heartbeat_send(void)
   rm.header.sender = me;
   rm.header.destination  = RDCP_HQ_MULTICAST_ADDRESS;
   rm.header.message_type = RDCP_MSGTYPE_HEARTBEAT;
-  rm.header.rdcp_payload_length = 0;
+  rm.header.rdcp_payload_length = 4;
   rm.header.counter = 0;
   rm.header.sequence_number = 0x0000; // special for Heartbeat messages
   rm.header.relay1 = 0xEE; // special for Heartbeat messages
   rm.header.relay2 = 0xEE;
   rm.header.relay3 = 0xEE;
 
+  rm.payload.data[0] = highest_oa_refnr % 256;
+  rm.payload.data[1] = highest_oa_refnr / 256;
+  uint16_t roam = getRoamingRecommendation(15*60*1000);
+  rm.payload.data[2] = roam % 256;
+  rm.payload.data[3] = roam / 256;
+
   /* Finalize the RDCP Header by calculating the checksum */
   uint8_t data_for_crc[256];
   memcpy(&data_for_crc, &rm.header, RDCP_HEADER_SIZE - 2);
-  uint16_t actual_crc = crc16(data_for_crc, RDCP_HEADER_SIZE - 2);
+  for (int i=0; i<4; i++) data_for_crc[RDCP_HEADER_SIZE - 2 + i] = rm.payload.data[i];
+  uint16_t actual_crc = crc16(data_for_crc, RDCP_HEADER_SIZE - 2 + 4);
   rm.header.checksum = actual_crc;
 
   /* Schedule the crafted message for sending */
   memcpy(&data, &rm.header, RDCP_HEADER_SIZE);
-  rdcp_txqueue_add(data, RDCP_HEADER_SIZE, NOTIMPORTANT, NOTFORCEDTX, TX_CALLBACK_NONE, 0);
+  for (int i=0; i<4; i++) data[RDCP_HEADER_SIZE + i] = rm.payload.data[i];
+  rdcp_txqueue_add(data, RDCP_HEADER_SIZE + 4, NOTIMPORTANT, NOTFORCEDTX, TX_CALLBACK_NONE, 0);
 
   return;
 }

@@ -54,6 +54,7 @@ int msg_crisis_last = 0;
 int msg_noncrisis_current = 0;
 int msg_noncrisis_total = 0;
 int msg_noncrisis_last = 0;
+extern uint16_t highest_oa_refnr;
 
 void tdeck_set_time(int year, int month, int day, int hour, int minute)
 {
@@ -140,6 +141,7 @@ void mb_zap_counters(void)
     msg_noncrisis_current = 0;
     msg_noncrisis_last = 0;
     msg_noncrisis_total = 0;
+    highest_oa_refnr = 0;
     return;
 }
 
@@ -375,6 +377,8 @@ void mb_check_for_signature(uint16_t origin, uint16_t refnr)
 void mb_add_external_message(char *text, char *rdcpmsg, uint16_t origin, uint16_t seqnr, uint16_t refnr, uint8_t morefrags, uint16_t lifetime, bool displayrelevance, bool deviceonlyrelevance, bool crisis, bool signedprivate, uint8_t subtype)
 {
     if (!hasStorage) return;
+
+    if (refnr > highest_oa_refnr) highest_oa_refnr = refnr;
 
     cur_he.local = GENERATED_EXTERNALLY;
     cur_he.display = displayrelevance;
@@ -846,7 +850,7 @@ bool mb_check_lifetime(void)
             mb_zap_counters();
             return true;
         }
-
+    
         bool has_expired = false;
 
         if (he.lifetime == 0)
@@ -874,6 +878,7 @@ bool mb_check_lifetime(void)
         if (!has_expired)
         {
             nf.write((uint8_t*)&he, sizeof(history_entry));
+            if ((he.local == GENERATED_EXTERNALLY) && (he.refnr > highest_oa_refnr)) highest_oa_refnr = he.refnr;
         }
         else
         {
@@ -966,7 +971,11 @@ void mb_update_lifetime(uint16_t origin, uint16_t refnr, uint16_t lifetime)
             he.lifetime = lifetime;
             he.timestamp_added = my_millis();
 
-            if (!delete_this) nf.write((uint8_t*)&he, sizeof(history_entry));
+            if (!delete_this) 
+            { 
+                nf.write((uint8_t*)&he, sizeof(history_entry));
+                if ((he.local == GENERATED_EXTERNALLY) && (he.refnr > highest_oa_refnr)) highest_oa_refnr = he.refnr;
+            }
         }
         i++;
     }
@@ -1062,7 +1071,12 @@ void mb_count(void)
                 msg_ignored += 1;
                 continue;
             }
-        if (cur_he.crisis) { msg_crisis_total += 1; msg_crisis_last = curpos; }
+        if (cur_he.crisis) 
+        { 
+            msg_crisis_total += 1; 
+            msg_crisis_last = curpos;
+            if ((cur_he.local == GENERATED_EXTERNALLY) && (cur_he.refnr > highest_oa_refnr)) highest_oa_refnr = cur_he.refnr;
+        }
         if (!cur_he.crisis) { msg_noncrisis_total += 1; msg_noncrisis_last = curpos; }
     }
     histfile.close();

@@ -105,7 +105,7 @@ uint16_t getEntryPoint(uint8_t num)
 
 uint16_t getSuggestedRelay(uint8_t retry=0)
 {
-  uint16_t roam = getRoamingRecommendation(1000*60*5);
+  uint16_t roam = getRoamingRecommendation(1000*60*15);
   if ((retry == 0) && (roam != 0x0000)) return roam;
   uint8_t index = 0;
   uint16_t da = getEntryPoint(index);
@@ -278,7 +278,7 @@ void updateRoamingTable(uint16_t da, int16_t rssi)
   return;
 }
 
-uint16_t getRoamingRecommendation(uint32_t timeframe = 1000*60*5)
+uint16_t getRoamingRecommendation(uint32_t timeframe = 1000*60*15)
 {
   int index = -1;
   int64_t now = my_millis();

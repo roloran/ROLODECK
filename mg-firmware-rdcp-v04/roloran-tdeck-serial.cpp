@@ -198,7 +198,7 @@ void serial_process_command(String s, String processing_mode, bool persist_selec
       int64_t cfdelta = rdcp_get_channel_free_estimation() - now;
       int txqe = get_num_txq_entries();
       int txaqe = get_num_txaq_entries();
-      uint16_t roam = getRoamingRecommendation(1000*60*5);
+      uint16_t roam = getRoamingRecommendation(1000*60*15);
       time_t wallclock = tdeck_get_time();
       char timestamp[32];
       struct tm ti;
