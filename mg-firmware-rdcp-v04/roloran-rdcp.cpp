@@ -738,6 +738,25 @@ uint8_t txq_overrun_counter = 0;
 
 bool rdcp_txqueue_add(uint8_t *data, uint8_t len, bool important, bool force_tx, uint8_t callback_selector, int64_t forced_time=0)
 {
+  char info[256];
+  int64_t now = my_millis();
+  for (int i=0; i < MAX_TXQUEUE_ENTRIES; i++)
+  {
+    if (!txq.entries[i].waiting) continue;
+    snprintf(info, 256, "INFO: Previous TXQ i:%02d w:%s f:%s i:%s, o:%" PRId64 ", c:%" PRId64 ", r:%" PRId64,
+      i, 
+      txq.entries[i].waiting ? "W" : "nW",
+      txq.entries[i].force_tx ? "F" : "nF",
+      txq.entries[i].important ? "I" : "nI",
+      txq.entries[i].originally_scheduled_time, 
+      txq.entries[i].currently_scheduled_time,
+      txq.entries[i].currently_scheduled_time - now
+    );
+    serial_writeln(info);
+  }
+  snprintf(info, 256, "INFO: CFEst = %" PRId64 ", rel %" PRId64, CFEst, CFEst-now);
+  serial_writeln(info);
+
   if (txq.num_entries == MAX_TXQUEUE_ENTRIES)
   {
     serial_writeln("WARNING: rdcp_txqueue_add() failed -- TXQ is full");
@@ -756,8 +775,6 @@ bool rdcp_txqueue_add(uint8_t *data, uint8_t len, bool important, bool force_tx,
     }
     return false;
   }
-
-  int64_t now = my_millis();
 
   for (int i=0; i < MAX_TXQUEUE_ENTRIES; i++)
   {
@@ -800,7 +817,7 @@ bool rdcp_txqueue_add(uint8_t *data, uint8_t len, bool important, bool force_tx,
 bool rdcp_txqueue_reschedule(int64_t offset=0)
 {
   int64_t now = my_millis();
-  int64_t delta = CFEst - now; // - CFEst_old;
+  int64_t delta = CFEst - now; 
   bool dropped = false;
 
   if (delta < 0) delta = 0;
@@ -814,9 +831,20 @@ bool rdcp_txqueue_reschedule(int64_t offset=0)
       if (txq.entries[i].force_tx) continue;
 
       txq.entries[i].num_of_reschedules++;
-      if (txq.entries[i].currently_scheduled_time < CFEst + delta)
+      
+      int64_t next_timestamp = CFEst;
+      for (int i=0; i < MAX_TXQUEUE_ENTRIES; i++)
       {
-        txq.entries[i].currently_scheduled_time = CFEst + delta + i;
+          if (txq.entries[i].in_process) continue;
+          if (txq.entries[i].force_tx) continue;
+          if (txq.entries[i].currently_scheduled_time  < next_timestamp) 
+            next_timestamp = txq.entries[i].currently_scheduled_time;
+      }
+      int64_t maximum_diff_to_cfest = CFEst - next_timestamp;
+  
+      if (txq.entries[i].currently_scheduled_time < CFEst + offset)
+      {
+        txq.entries[i].currently_scheduled_time += maximum_diff_to_cfest + offset;
       }
 
       if (txq.entries[i].currently_scheduled_time < now)
@@ -836,6 +864,26 @@ bool rdcp_txqueue_reschedule(int64_t offset=0)
       }
     }
   }
+
+  char info[256];
+  for (int i=0; i < MAX_TXQUEUE_ENTRIES; i++)
+  {
+    if (!txq.entries[i].waiting) continue;
+    snprintf(info, 256, "INFO: Rescheduled TXQ i:%02d w:%s f:%s i:%s nr:%d, o:%" PRId64 ", c:%" PRId64 ", r:%" PRId64,
+      i, 
+      txq.entries[i].waiting ? "W" : "nW",
+      txq.entries[i].force_tx ? "F" : "nF",
+      txq.entries[i].important ? "I" : "nI",
+      txq.entries[i].num_of_reschedules,
+      txq.entries[i].originally_scheduled_time, 
+      txq.entries[i].currently_scheduled_time,
+      txq.entries[i].currently_scheduled_time - now
+    );
+    serial_writeln(info);
+  }
+  snprintf(info, 256, "INFO: CFEst = %" PRId64 ", rel %" PRId64, CFEst, CFEst-now);
+  serial_writeln(info);
+
   return dropped;
 }
 
