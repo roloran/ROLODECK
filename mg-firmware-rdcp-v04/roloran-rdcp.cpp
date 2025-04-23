@@ -891,13 +891,15 @@ bool rdcp_txqueue_reschedule(int64_t offset=0)
 bool rdcp_txqueue_loop(void)
 {
   int64_t now = my_millis();
+  char info[256];
 
   /* Skip if any transmission is already ongoing */
   if (tx_ongoing != -1)
   {
     if (now - last_tx_activity > 180000)
     {
-      serial_writeln("WARNING: TX Activity Timeout, restarting TXQ processing");
+      snprintf(info, 256, "WARNING: TX_Activity Timeout for TXQi %d, restarting TXQ processing", tx_ongoing);
+      serial_writeln(info);
       txq.entries[tx_ongoing].in_process = false;
       txq.entries[tx_ongoing].cad_retry = 0;
       tx_ongoing = -1;
@@ -1061,6 +1063,7 @@ bool rdcp_send_message_force(void)
   if (tx_ongoing == -1)
   {
     serial_writeln("WARNING: rdcp_send_message_force() called with no tx_ongoing");
+    lora_radio_receivemode();
     return false;
   }
   int64_t now = my_millis();
@@ -1169,11 +1172,18 @@ bool rdcp_callback_cad(bool cad_busy)
 
   last_tx_activity = my_millis();
 
+  snprintf(buf, 256, "INFO: Send-processing: CAD reports channel %s (try %d for TXQi%d)", channel_free ? "free" : "busy", txq.entries[tx_ongoing].cad_retry + 1, tx_ongoing);
+  serial_writeln(buf);
+
+  if (tx_ongoing == -1)
+  {
+    serial_writeln("WARNING: CAD attempted without ongoing transmission");
+    lora_radio_receivemode();
+    return false;
+  }
+
   txq.entries[tx_ongoing].cad_retry += 1;
   uint8_t retry = txq.entries[tx_ongoing].cad_retry;
-
-  snprintf(buf, 256, "INFO: Send-processing: CAD reports channel %s (try %d)", channel_free ? "free" : "busy", retry);
-  serial_writeln(buf);
 
   if (channel_free)
   {
