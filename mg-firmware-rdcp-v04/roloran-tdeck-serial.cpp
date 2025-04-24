@@ -272,6 +272,10 @@ void serial_process_command(String s, String processing_mode, bool persist_selec
       {
         mb_serial_show_messages();
       }
+      else if (p1.equals(String("QUEUES")))
+      {
+        rdcp_dump_queues();
+      }
       // Further SHOW commands can be added here
     } // ^ SHOW
     else if (s_uppercase.startsWith("LORAFREQ "))

@@ -888,6 +888,62 @@ bool rdcp_txqueue_reschedule(int64_t offset=0)
   return dropped;
 }
 
+void rdcp_dump_queues(void)
+{
+  char info[256];
+  int64_t now = my_millis();
+
+  snprintf(info, 256, "INFO: QUEUE DUMP TXQ BEGIN, num=%02d/%02d", txq.num_entries, MAX_TXQUEUE_ENTRIES);
+  serial_writeln(info);
+
+  for (int i=0; i < MAX_TXQUEUE_ENTRIES; i++)
+  {
+    if (!txq.entries[i].waiting) continue;
+    snprintf(info, 256, "INFO: QUEUE DUMP TXQ i:%02d, l:%03d c:%02X%02X f:%s i:%s t:%s p:%02d, o:%" PRId64 ", c:%" PRId64 ", r:%" PRId64,
+      i, 
+      txq.entries[i].payload_length,
+      txq.entries[i].payload[RDCP_HEADER_SIZE-1],
+      txq.entries[i].payload[RDCP_HEADER_SIZE-2],
+      txq.entries[i].force_tx ? "Y" : "N",
+      txq.entries[i].important ? "Y" : "N",
+      txq.entries[i].in_process ? "Y" : "N",
+      txq.entries[i].num_of_reschedules,
+      txq.entries[i].originally_scheduled_time, 
+      txq.entries[i].currently_scheduled_time,
+      txq.entries[i].currently_scheduled_time - now
+    );
+    serial_writeln(info);
+  }
+  snprintf(info, 256, "INFO: QUEUE DUMP TXQ END, num=%02d/%02d", txq.num_entries, MAX_TXQUEUE_ENTRIES);
+  serial_writeln(info);
+
+  snprintf(info, 256, "INFO: QUEUE DUMP TXAQ BEGIN, num=%02d/%02d", txaq.num_entries, MAX_TXAHEADQUEUE_ENTRIES);
+  serial_writeln(info);
+
+  for (int i=0; i < MAX_TXAHEADQUEUE_ENTRIES; i++)
+  {
+    if (!txaq.entries[i].waiting) continue;
+    snprintf(info, 256, "INFO: QUEUE DUMP TXAQ i:%02d, l:%03d c:%02X%02X f:%s i:%s, o:%" PRId64 ", r:%" PRId64,
+      i, 
+      txaq.entries[i].payload_length,
+      txaq.entries[i].payload[RDCP_HEADER_SIZE-1],
+      txaq.entries[i].payload[RDCP_HEADER_SIZE-2],
+      txaq.entries[i].force_tx ? "Y" : "N",
+      txaq.entries[i].important ? "Y" : "N",
+      txaq.entries[i].scheduled_time, 
+      txaq.entries[i].scheduled_time - now
+    );
+    serial_writeln(info);
+  }
+  snprintf(info, 256, "INFO: QUEUE DUMP TXAQ END, num=%02d/%02d", txaq.num_entries, MAX_TXAHEADQUEUE_ENTRIES);
+  serial_writeln(info);
+
+  snprintf(info, 256, "INFO: Now = %" PRId64 " ms, CFEst = %" PRId64 " ms, rel %" PRId64 " ms", now, CFEst, CFEst-now);
+  serial_writeln(info);
+
+  return;
+}
+
 bool rdcp_txqueue_loop(void)
 {
   int64_t now = my_millis();

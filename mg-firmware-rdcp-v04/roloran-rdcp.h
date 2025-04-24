@@ -611,5 +611,11 @@ void rdcp_check_cirefile(void);
  */
 int get_cire_state(void);
 
+/**
+ * Dump TXQ und TXAQ over Serial.
+ */
+
+void rdcp_dump_queues(void);
+
 #endif
 /* EOF */
