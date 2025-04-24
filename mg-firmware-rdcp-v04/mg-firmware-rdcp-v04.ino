@@ -187,7 +187,7 @@ void loop(void)
       serial_writeln(info);
       old_min_free_heap = min_free_heap;
       old_free_heap = free_heap;
-      if (free_heap < 32768)
+      if ((free_heap < 32768) && is_screensaver_on())
       {
         serial_writeln("ERROR: OUT OF MEMORY - restarting as countermeasure");
         delay(1000);
