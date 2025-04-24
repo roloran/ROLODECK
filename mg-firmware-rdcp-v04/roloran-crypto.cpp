@@ -39,6 +39,9 @@ bool decrypt_aes256gcm_simplified(uint8_t *ciphertext, size_t csize, uint8_t *ad
 
 SchnorrSigCtx ssc;
 bool ssc_initialized = false;
+SchnorrSigVerify ssv;
+bool ssv_initialized = false;
+
 
 bool schnorr_init_ctx(void)
 {
@@ -100,12 +103,10 @@ int schnorr_create_signature(uint8_t *data, uint8_t datalen, uint8_t *targetbuff
   return tbi;
 }
 
-SchnorrSigVerify ssv = SchnorrSigVerify();
-bool ssv_initialized = false;
-
 int schnorr_init_verify(void)
 {
   if (ssv_initialized) return 0;
+  ssv = SchnorrSigVerify();
   char *HQPubKey = getHQpublicKey();
   int res = ssv.init(&ssc, HQPubKey);
   ssv_initialized = true;
