@@ -298,6 +298,7 @@ bool lora_radio_send(uint8_t *data, uint8_t len)
 
 void lora_radio_startcad(void)
 {
+  serial_writeln("INFO: Starting LoRa Channel Activity Detection");
   digitalWrite(TDECK_TFT_CS, HIGH);
   delay(1);
   digitalWrite(TDECK_RADIO_CS, LOW);
