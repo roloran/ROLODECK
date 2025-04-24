@@ -35,6 +35,8 @@ int retransmission_count = 0;
 int64_t last_tx_activity = 0;
 
 int32_t bad_crc_counter = 0;
+uint16_t most_recent_airtime = 0;
+uint8_t most_recent_future_timeslots = 0;
 
 int64_t rdcp_get_channel_free_estimation(void)
 {
@@ -136,6 +138,52 @@ bool rdcp_check_crc_in(uint8_t real_packet_length)
   return false;
 }
 
+int64_t last_csv_timestamp = 0;
+
+void print_rdcp_csv(void)
+{
+  int64_t now = my_millis();
+  char info[512];
+
+  uint16_t refnr = 0x0000;
+  if (rdcp_msg_in.header.message_type == RDCP_MSGTYPE_OFFICIAL_ANNOUNCEMENT)
+  {
+    refnr = rdcp_msg_in.payload.data[1] + 256 * rdcp_msg_in.payload.data[2];
+  }
+  else if (rdcp_msg_in.header.message_type == RDCP_MSGTYPE_SIGNATURE)
+  {
+    refnr = rdcp_msg_in.payload.data[0] + 256 * rdcp_msg_in.payload.data[1];
+  }
+
+  snprintf(info, 512, "RDCPCSV: %04X,%" PRId64 ",%" PRId64 ",%" PRId64 ",%" PRId64 ",%d,%04X,%d,%04X,%04X,%04X,%04X,%02X,%d,%02X,%02X,%02X,%04X,%d,%3.3f", 
+    getMyRDCPAddress(),
+    now - last_csv_timestamp,
+    now, 
+    CFEst,
+    CFEst - now,
+    rdcp_msg_in.header.rdcp_payload_length + 16,
+    refnr,
+    most_recent_future_timeslots,
+    rdcp_msg_in.header.sender,
+    rdcp_msg_in.header.origin,
+    rdcp_msg_in.header.sequence_number,
+    rdcp_msg_in.header.destination,
+    rdcp_msg_in.header.message_type,
+    rdcp_msg_in.header.counter,
+    rdcp_msg_in.header.relay1,
+    rdcp_msg_in.header.relay2,
+    rdcp_msg_in.header.relay3,
+    rdcp_msg_in.header.checksum,
+    most_recent_airtime,
+    getMyLoRaFrequency() 
+  );
+  serial_writeln(info);
+
+  last_csv_timestamp = now;
+
+  return;
+}
+
 uint16_t most_recent_origin = 0x0000;
 uint16_t most_recent_seqnr  = 0x0000;
 
@@ -185,6 +233,8 @@ bool rdcp_mg_process_rxed_lora_packet(uint8_t *lora_packet, uint16_t lora_packet
   {
     updateRoamingTable(rdcp_msg_in.header.sender, rssi);
   }
+
+  print_rdcp_csv();
 
   /* Check for RDCP message duplicate */
   if (rdcp_check_duplicate_message(rdcp_msg_in.header.origin, rdcp_msg_in.header.sequence_number) == true)
@@ -295,6 +345,8 @@ uint16_t airtime_in_ms(uint8_t payload_size)
   /* Sum it up, converting from seconds to milliseconds and from Double to Int */
   time_for_packet = (uint16_t) (1000 * (time_for_preamble + time_for_payload));
 
+  most_recent_airtime = time_for_packet;
+
   return time_for_packet;
 }
 
@@ -353,6 +405,8 @@ void rdcp_update_channel_free_estimator_rx(void)
 
   uint32_t channel_free_after = remaining_current_sender_time + future_timeslots * timeslot_duration;
   int64_t channel_free_at = my_millis() + channel_free_after;
+
+  most_recent_future_timeslots = future_timeslots;
 
   rdcp_update_channel_free_estimation(channel_free_at);
 
