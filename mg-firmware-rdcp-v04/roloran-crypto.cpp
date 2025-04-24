@@ -100,18 +100,27 @@ int schnorr_create_signature(uint8_t *data, uint8_t datalen, uint8_t *targetbuff
   return tbi;
 }
 
+SchnorrSigVerify ssv = SchnorrSigVerify();
+bool ssv_initialized = false;
+
+int schnorr_init_verify(void)
+{
+  if (ssv_initialized) return 0;
+  char *HQPubKey = getHQpublicKey();
+  int res = ssv.init(&ssc, HQPubKey);
+  ssv_initialized = true;
+  return res;
+}
+
 bool schnorr_verify_signature(uint8_t *data, uint8_t datalen, uint8_t *signature)
 {
   schnorr_init_ctx();
-
-  SchnorrSigVerify ssv = SchnorrSigVerify();
-  char *HQPubKey = getHQpublicKey();
-  int res = ssv.init(&ssc, HQPubKey);
+  int res = schnorr_init_verify();
                                
   if (res != 0)
   {
     char msg[256];
-    snprintf(msg, 256, "ERROR: schnorr_verify_signature() could not initialize (res %d) with HQ public key %s", res, HQPubKey);
+    snprintf(msg, 256, "ERROR: schnorr_verify_signature() could not initialize (res %d) with HQ public key %s", res, getHQpublicKey());
     serial_writeln(msg);
     return false;
   }
