@@ -14,7 +14,7 @@
 #include "tdeck_gui.h"                  // GUI helper functions
 #include <Hash.h>
 #include <Crypto.h>
-#include <FFat.h>
+#include <LittleFS.h>
 
 #define BUFFER_SIZE 512
 #define FILENAME_CIRE "/cire"
@@ -1384,7 +1384,7 @@ void rdcp_cire_resend(void)
     for (int i=0; i<16; i++) cire_seqnrs[i] = 0x0000;
     serial_writeln("WARNING: CIRE could not be sent (ACK missing), giving up");
 
-    FFat.remove(FILENAME_CIRE);
+    LittleFS.remove(FILENAME_CIRE);
 
     char gui_text[512];
     snprintf(gui_text, 512, "WICHTIG: Ihre Meldung %04X-%d konnte anhaltend NICHT an den Krisenstab zugestellt werden. Bitte weichen Sie auf andere Kommunikationswege aus oder versuchen Sie es zu einer anderen Zeit und ggf. von einem anderen Ort aus erneut.", getMyRDCPAddress(), cire_current_refnr);
@@ -1479,7 +1479,7 @@ void rdcp_cire_ack(uint16_t origin, uint16_t confirmedseqnr, uint8_t acktype)
 
   if ((origin >= 0x0200) && (origin < 0x0300))
   {
-    FFat.remove(FILENAME_CIRE);
+    LittleFS.remove(FILENAME_CIRE);
     // Received ACK was from a DA, not by HQ
     if (acktype == RDCP_ACKNOWLEDGMENT_POSITIVE)
     {
@@ -1523,7 +1523,7 @@ void rdcp_cire_ack(uint16_t origin, uint16_t confirmedseqnr, uint8_t acktype)
   if ((origin > 0x0000) && (origin < 0x0100))
   {
     // Received ACK was from HQ; in any case, clear current CIRE state:
-    FFat.remove(FILENAME_CIRE);
+    LittleFS.remove(FILENAME_CIRE);
     for (int i=0; i<16; i++) cire_seqnrs[i] = 0x0000;
     cire_retry = 0;
     cire_state = CIRE_STATE_NONE;
@@ -1685,7 +1685,7 @@ void rdcp_check_cirefile(void)
 {
   if (hasStorage)
   {
-    File cf = FFat.open(FILENAME_CIRE, FILE_READ);
+    File cf = LittleFS.open(FILENAME_CIRE, FILE_READ);
     if (cf)
     {
       cf.read((uint8_t*)&cfile, sizeof(cirefileentry));
@@ -1711,7 +1711,7 @@ void rdcp_send_cire(uint8_t subtype, uint16_t refnr, char *text)
     cfile.subtype = subtype;
     cfile.refnr = refnr;
     snprintf(cfile.text, 256, "%s", text);
-    File cf = FFat.open(FILENAME_CIRE, FILE_WRITE);
+    File cf = LittleFS.open(FILENAME_CIRE, FILE_WRITE);
     if (cf)
     {
       cf.write((uint8_t*)&cfile, sizeof(cirefileentry));
@@ -2281,7 +2281,7 @@ void rdcp_blockdevice_lock(uint16_t duration)
 
   if (hasStorage)
   {
-    File f = FFat.open(FILENAME_DEVLOCK, FILE_WRITE);
+    File f = LittleFS.open(FILENAME_DEVLOCK, FILE_WRITE);
     if (f)
     {
       f.write((uint8_t*)&locke, sizeof(lockentry));
@@ -2297,7 +2297,7 @@ void rdcp_blockdevice_unlock(void)
   gui_enable_cire_buttons();
   if (hasStorage)
   {
-    FFat.remove(FILENAME_DEVLOCK);
+    LittleFS.remove(FILENAME_DEVLOCK);
   }
   device_is_locked = false;
 
@@ -2310,7 +2310,7 @@ void rdcp_blockdevice_check(void)
   {
     if (hasStorage)
     {
-      File f = FFat.open(FILENAME_DEVLOCK, FILE_READ);
+      File f = LittleFS.open(FILENAME_DEVLOCK, FILE_READ);
       if (f)
       {
         f.read((uint8_t*)&locke, sizeof(lockentry));

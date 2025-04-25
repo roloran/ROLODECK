@@ -73,7 +73,7 @@ void setup(void)
 {
   tdeck_setup();                // Initialize the LilyGo hardware; must be first
   radio_setup();                // Initialize SX1262; must be second due to SPI quirks
-  persistence_setup();          // Initialize FFat persistence
+  persistence_setup();          // Initialize persistence
   provisioned = persistence_configure_device_settings(); // Initialize device settings based on provisioning
 
   if (provisioned)

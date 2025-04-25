@@ -3,7 +3,7 @@
 #include "roloran-tdeck-serial.h"
 #include "roloran-crypto.h"
 #include "roloran-tdeck-hal.h"
-#include <FFat.h> 
+#include <LittleFS.h> 
 
 /**
  * Settings that should be unique for each device
@@ -315,7 +315,7 @@ bool shall_show_eula(void)
     checked_poweron_counter = true;
     uint64_t count = 1;
 
-    File f = FFat.open(FILENAME_COUNT, FILE_READ);
+    File f = LittleFS.open(FILENAME_COUNT, FILE_READ);
     if (f)
     {
       f.read((uint8_t*)&count, sizeof(uint64_t));
@@ -323,7 +323,7 @@ bool shall_show_eula(void)
       count++;
     }
     
-    f = FFat.open(FILENAME_COUNT, FILE_WRITE);
+    f = LittleFS.open(FILENAME_COUNT, FILE_WRITE);
     f.write((uint8_t*)&count, sizeof(uint64_t));
     f.close();
     

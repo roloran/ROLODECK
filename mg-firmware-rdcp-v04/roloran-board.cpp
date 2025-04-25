@@ -1,4 +1,4 @@
-#include <FFat.h>
+#include <LittleFS.h>
 #include "roloran-board.h"
 #include "roloran-tdeck-persistence.h"
 #include "roloran-rdcp.h"
@@ -126,7 +126,7 @@ int histfile_numentries(void)
 {
     if (!hasStorage) return -1;
     if (histfile) histfile.close();
-    histfile = FFat.open(FILENAME_HISTORY, FILE_READ);
+    histfile = LittleFS.open(FILENAME_HISTORY, FILE_READ);
     if (!histfile) return -1 ; // { xSemaphoreGive(highlander); return -1; }
     size_t filesize = histfile.size();
     histfile.close();
@@ -150,7 +150,7 @@ void mb_clear_history(void)
     if (!hasStorage) return;
     if (histfile) histfile.close();
     serial_writeln("INFO: Clearing Message Board persistent history file");
-    FFat.remove(FILENAME_HISTORY);
+    LittleFS.remove(FILENAME_HISTORY);
     mb_zap_counters();
     return;
 }
@@ -193,7 +193,7 @@ void mb_add_local_message(char *text, uint16_t refnr, uint16_t seqnr, uint16_t l
     serial_writeln(info);
 
     if (histfile) histfile.close();
-    histfile = FFat.open(FILENAME_HISTORY, FILE_APPEND);
+    histfile = LittleFS.open(FILENAME_HISTORY, FILE_APPEND);
     if (!histfile) return;
     histfile.write((uint8_t*) &cur_he, sizeof(history_entry));
     histfile.close();
@@ -230,7 +230,7 @@ void mb_check_for_signature(uint16_t origin, uint16_t refnr)
     bool first_fragment = true;
 
     if (histfile) histfile.close();
-    histfile = FFat.open(FILENAME_HISTORY, FILE_READ);
+    histfile = LittleFS.open(FILENAME_HISTORY, FILE_READ);
     if (!histfile) return;
 
     SHA256 h = SHA256();
@@ -326,10 +326,10 @@ void mb_check_for_signature(uint16_t origin, uint16_t refnr)
     if (signature_valid)
     {
         if (histfile) histfile.close();
-        histfile = FFat.open(FILENAME_HISTORY, FILE_READ);
+        histfile = LittleFS.open(FILENAME_HISTORY, FILE_READ);
         if (!histfile) return;
 
-        File nf = FFat.open(FILENAME_HISTTMP, FILE_WRITE);
+        File nf = LittleFS.open(FILENAME_HISTTMP, FILE_WRITE);
         if (!nf)
         {
             histfile.close();
@@ -344,8 +344,8 @@ void mb_check_for_signature(uint16_t origin, uint16_t refnr)
             {
                 serial_writeln("ERROR: Bad MB history file entry, deleting history file");
                 histfile.close(); nf.close();
-                FFat.remove(FILENAME_HISTORY);
-                FFat.remove(FILENAME_HISTTMP);
+                LittleFS.remove(FILENAME_HISTORY);
+                LittleFS.remove(FILENAME_HISTTMP);
                 mb_zap_counters();
                 return;
             }
@@ -364,8 +364,8 @@ void mb_check_for_signature(uint16_t origin, uint16_t refnr)
         }
         histfile.close();
         nf.close();
-        FFat.remove(FILENAME_HISTORY);
-        FFat.rename(FILENAME_HISTTMP, FILENAME_HISTORY);
+        LittleFS.remove(FILENAME_HISTORY);
+        LittleFS.rename(FILENAME_HISTTMP, FILENAME_HISTORY);
         serial_writeln("INFO: Finished rewriting Message Board history file after new valid signature");
 
         mb_count_and_show_last();
@@ -424,7 +424,7 @@ void mb_add_external_message(char *text, char *rdcpmsg, uint16_t origin, uint16_
 
     // check for duplicate entries
     bool is_dupe = false;
-    histfile = FFat.open(FILENAME_HISTORY, FILE_READ);
+    histfile = LittleFS.open(FILENAME_HISTORY, FILE_READ);
     while (histfile.read((uint8_t*)&dupe_he, sizeof(history_entry)) == sizeof(history_entry))
     {
         if ( (dupe_he.origin == cur_he.origin) &&
@@ -439,7 +439,7 @@ void mb_add_external_message(char *text, char *rdcpmsg, uint16_t origin, uint16_
     histfile.close();
     if (is_dupe) return; // already added and processed, do nothing
 
-    histfile = FFat.open(FILENAME_HISTORY, FILE_APPEND);
+    histfile = LittleFS.open(FILENAME_HISTORY, FILE_APPEND);
     if (!histfile) return;
     histfile.write((uint8_t*) &cur_he, sizeof(history_entry));
     histfile.close();
@@ -485,7 +485,7 @@ void mb_refresh_display(void)
         serial_writeln("WARNING: Histfile already open");
         histfile.close();
     }
-    histfile = FFat.open(FILENAME_HISTORY, FILE_READ);
+    histfile = LittleFS.open(FILENAME_HISTORY, FILE_READ);
     if (!histfile) return;
 
     size_t allocSize = 64 * 1024; // 64 kB ought to be enough for everymessage
@@ -516,7 +516,7 @@ void mb_refresh_display(void)
         {
             serial_writeln("ERROR: Bad Message Board history entry, deleting history file");
             histfile.close();
-            FFat.remove(FILENAME_HISTORY);
+            LittleFS.remove(FILENAME_HISTORY);
             return;
         }
 
@@ -662,7 +662,7 @@ void mb_serial_show_messages(void)
         serial_writeln("WARNING: Histfile already open");
         histfile.close();
     }
-    histfile = FFat.open(FILENAME_HISTORY, FILE_READ);
+    histfile = LittleFS.open(FILENAME_HISTORY, FILE_READ);
     if (!histfile) return;
 
     for (int i=0; i<num_entries; i++)
@@ -676,7 +676,7 @@ void mb_serial_show_messages(void)
         {
             serial_writeln("ERROR: Bad Message Board history entry, deleting history file");
             histfile.close();
-            FFat.remove(FILENAME_HISTORY);
+            LittleFS.remove(FILENAME_HISTORY);
             return;
         }
 
@@ -725,8 +725,8 @@ void mb_rewrite_history_obs(int changeidx, bool deletion)
         histfile.close();
     }
 
-    histfile = FFat.open(FILENAME_HISTORY, FILE_READ); if (!histfile) return;
-    File nf = FFat.open(FILENAME_HISTTMP, FILE_WRITE); if (!nf) { histfile.close(); return; }
+    histfile = LittleFS.open(FILENAME_HISTORY, FILE_READ); if (!histfile) return;
+    File nf = LittleFS.open(FILENAME_HISTTMP, FILE_WRITE); if (!nf) { histfile.close(); return; }
 
     int i = 0;
     while (histfile.read((uint8_t*)&he, sizeof(history_entry)) == sizeof(history_entry))
@@ -743,8 +743,8 @@ void mb_rewrite_history_obs(int changeidx, bool deletion)
     }
 
     histfile.close(); nf.close();
-    FFat.remove(FILENAME_HISTORY);
-    FFat.rename(FILENAME_HISTTMP, FILENAME_HISTORY);
+    LittleFS.remove(FILENAME_HISTORY);
+    LittleFS.rename(FILENAME_HISTTMP, FILENAME_HISTORY);
 
     char info[128];
     snprintf(info, 128, "INFO: MB History re-written, %d entries, %s entry %d", i, deletion ? "deleted" : "changed", changeidx);
@@ -786,7 +786,7 @@ void mb_add_signature(uint8_t *signature, uint16_t origin, uint16_t refnr)
 
     // check for duplicate entries
     bool is_dupe = false;
-    histfile = FFat.open(FILENAME_HISTORY, FILE_READ);
+    histfile = LittleFS.open(FILENAME_HISTORY, FILE_READ);
     while (histfile.read((uint8_t*)&dupe_he, sizeof(history_entry)) == sizeof(history_entry))
     {
         if ( (dupe_he.origin   == cur_he.origin)    &&
@@ -801,7 +801,7 @@ void mb_add_signature(uint8_t *signature, uint16_t origin, uint16_t refnr)
     histfile.close();
     if (is_dupe) return; // already added and processed, do nothing
 
-    histfile = FFat.open(FILENAME_HISTORY, FILE_APPEND);
+    histfile = LittleFS.open(FILENAME_HISTORY, FILE_APPEND);
     if (!histfile) return; // { xSemaphoreGive(highlander); return; }
     histfile.write((uint8_t*) &cur_he, sizeof(history_entry));
     histfile.close();
@@ -826,10 +826,10 @@ bool mb_check_lifetime(void)
         serial_writeln("WARNING: mb_chk_lt History file already open");
         histfile.close();
     }
-    histfile = FFat.open(FILENAME_HISTORY, FILE_READ);
+    histfile = LittleFS.open(FILENAME_HISTORY, FILE_READ);
     if (!histfile) return false;
 
-    File nf = FFat.open(FILENAME_HISTTMP, FILE_WRITE);
+    File nf = LittleFS.open(FILENAME_HISTTMP, FILE_WRITE);
     if (!nf)
     {
         histfile.close();
@@ -845,8 +845,8 @@ bool mb_check_lifetime(void)
             serial_writeln("ERROR: Bad MB history file entry, deleting history file");
             histfile.close();
             nf.close();
-            FFat.remove(FILENAME_HISTORY);
-            FFat.remove(FILENAME_HISTTMP);
+            LittleFS.remove(FILENAME_HISTORY);
+            LittleFS.remove(FILENAME_HISTTMP);
             mb_zap_counters();
             return true;
         }
@@ -889,8 +889,8 @@ bool mb_check_lifetime(void)
 
     histfile.close();
     nf.close();
-    FFat.remove(FILENAME_HISTORY);
-    FFat.rename(FILENAME_HISTTMP, FILENAME_HISTORY);
+    LittleFS.remove(FILENAME_HISTORY);
+    LittleFS.rename(FILENAME_HISTTMP, FILENAME_HISTORY);
 
     return deleted_something;
 }
@@ -922,10 +922,10 @@ void mb_update_lifetime(uint16_t origin, uint16_t refnr, uint16_t lifetime)
     int64_t now = my_millis();
 
     if (histfile) histfile.close();
-    histfile = FFat.open(FILENAME_HISTORY, FILE_READ);
+    histfile = LittleFS.open(FILENAME_HISTORY, FILE_READ);
     if (!histfile) return;
 
-    File nf = FFat.open(FILENAME_HISTTMP, FILE_WRITE);
+    File nf = LittleFS.open(FILENAME_HISTTMP, FILE_WRITE);
     if (!nf)
     {
         histfile.close();
@@ -941,8 +941,8 @@ void mb_update_lifetime(uint16_t origin, uint16_t refnr, uint16_t lifetime)
             serial_writeln("ERROR: Bad MB history file entry, deleting history file");
             histfile.close();
             nf.close();
-            FFat.remove(FILENAME_HISTORY);
-            FFat.remove(FILENAME_HISTTMP);
+            LittleFS.remove(FILENAME_HISTORY);
+            LittleFS.remove(FILENAME_HISTTMP);
             mb_zap_counters();
             return;
         }
@@ -982,8 +982,8 @@ void mb_update_lifetime(uint16_t origin, uint16_t refnr, uint16_t lifetime)
 
     histfile.close();
     nf.close();
-    FFat.remove(FILENAME_HISTORY);
-    FFat.rename(FILENAME_HISTTMP, FILENAME_HISTORY);
+    LittleFS.remove(FILENAME_HISTORY);
+    LittleFS.rename(FILENAME_HISTTMP, FILENAME_HISTORY);
     if (deleted_something) mb_zap_counters();
     return;
 }
@@ -992,7 +992,7 @@ void mb_load_entry(int num)
 {
     if (!hasStorage) return;
     if (histfile) histfile.close();
-    histfile = FFat.open(FILENAME_HISTORY, FILE_READ);
+    histfile = LittleFS.open(FILENAME_HISTORY, FILE_READ);
     if (!histfile) return;
 
     for (int i=0; i<num; i++)
@@ -1048,7 +1048,7 @@ void mb_count(void)
 
     if (!hasStorage) return;
     if (histfile) histfile.close();
-    histfile = FFat.open(FILENAME_HISTORY, FILE_READ);
+    histfile = LittleFS.open(FILENAME_HISTORY, FILE_READ);
     if (!histfile) return;
 
     while (true)
@@ -1059,7 +1059,7 @@ void mb_count(void)
         {
             serial_writeln("ERROR: Bad Message Board history entry, deleting history file");
             histfile.close();
-            FFat.remove(FILENAME_HISTORY);
+            LittleFS.remove(FILENAME_HISTORY);
             msg_crisis_total = 0; msg_noncrisis_total = 0;
             msg_crisis_last = 0; msg_noncrisis_last = 0;
             msg_crisis_current = 0; msg_noncrisis_current = 0;
@@ -1093,7 +1093,7 @@ void mb_show_by_number(int msgno, bool crisis)
 {
     if (!hasStorage) return;
     if (histfile) histfile.close();
-    histfile = FFat.open(FILENAME_HISTORY, FILE_READ);
+    histfile = LittleFS.open(FILENAME_HISTORY, FILE_READ);
     if (!histfile) return;
 
     int counter = 0;
@@ -1105,7 +1105,7 @@ void mb_show_by_number(int msgno, bool crisis)
         {
             serial_writeln("ERROR: Bad Message Board history entry, deleting history file");
             histfile.close();
-            FFat.remove(FILENAME_HISTORY);
+            LittleFS.remove(FILENAME_HISTORY);
             msg_crisis_total = 0; msg_noncrisis_total = 0;
             msg_crisis_last = 0; msg_noncrisis_last = 0;
             msg_crisis_current = 0; msg_noncrisis_current = 0;
