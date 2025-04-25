@@ -802,7 +802,7 @@ void mb_add_signature(uint8_t *signature, uint16_t origin, uint16_t refnr)
     if (is_dupe) return; // already added and processed, do nothing
 
     histfile = LittleFS.open(FILENAME_HISTORY, FILE_APPEND);
-    if (!histfile) return; // { xSemaphoreGive(highlander); return; }
+    if (!histfile) return; 
     histfile.write((uint8_t*) &cur_he, sizeof(history_entry));
     histfile.close();
 
@@ -883,6 +883,9 @@ bool mb_check_lifetime(void)
         else
         {
             deleted_something = true;
+            char info[128];
+            snprintf(info, 128, "INFO: Dropped MB entry o%04X r%04X - expired", he.origin, he.refnr);
+            serial_writeln(info);
         }
         i++;
     }
@@ -975,6 +978,12 @@ void mb_update_lifetime(uint16_t origin, uint16_t refnr, uint16_t lifetime)
             { 
                 nf.write((uint8_t*)&he, sizeof(history_entry));
                 if ((he.local == GENERATED_EXTERNALLY) && (he.refnr > highest_oa_refnr)) highest_oa_refnr = he.refnr;
+            }
+            else 
+            {
+                char info[128];
+                snprintf(info, 128, "INFO: Dropped MB entry o%04X r%04X - lifetime set to zero", he.origin, he.refnr);
+                serial_writeln(info);
             }
         }
         i++;
