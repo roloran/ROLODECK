@@ -268,6 +268,14 @@ bool rdcp_mg_process_rxed_lora_packet(uint8_t *lora_packet, uint16_t lora_packet
 
   most_recent_origin = rdcp_msg_in.header.origin; 
   most_recent_seqnr  = rdcp_msg_in.header.sequence_number;
+
+  /*
+    If the received message is a CIRE sent by another MG, we should try to keep the channel
+    free for the EP DA's ACK reply. 
+  */
+  if ((rdcp_msg_in.header.message_type == RDCP_MSGTYPE_CITIZEN_REPORT) &&
+      (rdcp_msg_in.header.sender >= 0x0300)) rdcp_update_channel_free_estimation(CFEst + 60000);
+
   rdcp_mg_process_incoming_message();
 
   return true;
