@@ -1249,6 +1249,35 @@ void rdcp_send_message_cad(void)
   return;
 }
 
+void rdcp_update_cfest_out(uint8_t len, uint8_t rcnt, uint8_t mt)
+{
+  uint16_t airtime = airtime_in_ms(len);
+  uint16_t airtime_with_buffer = airtime + 1000;
+
+  uint32_t remaining_current_sender_time = airtime_with_buffer * rcnt;
+
+  uint8_t nrt = 0;
+  if ( (mt == RDCP_MSGTYPE_INFRASTRUCTURE_RESET) || (mt == RDCP_MSGTYPE_ACK) ||
+       (mt == RDCP_MSGTYPE_RESET_ALL_ANNOUNCEMENTS) ) nrt = 2;
+  if ( (mt == RDCP_MSGTYPE_OFFICIAL_ANNOUNCEMENT) || (mt == RDCP_MSGTYPE_CITIZEN_REPORT) ||
+       (mt == RDCP_MSGTYPE_SIGNATURE) ) nrt = 4;
+
+  uint32_t timeslot_duration = (nrt+1) * airtime_with_buffer;
+  uint8_t future_timeslots = 0;
+
+  uint32_t channel_free_after = remaining_current_sender_time + future_timeslots * timeslot_duration;
+  int64_t channel_free_at = my_millis() + channel_free_after;
+
+  rdcp_update_channel_free_estimation(channel_free_at);
+
+  char buf[256];
+  snprintf(buf, 256, "INFO: CFEst4current (out): +%zu ms, @%llu ms (airtime %u ms, retrans %zu ms, timeslot %zu ms, %d fut ts)", 
+    channel_free_after, channel_free_at, airtime, remaining_current_sender_time, timeslot_duration, future_timeslots);
+  serial_writeln(buf);
+
+  return;
+}
+
 bool rdcp_send_message_force(void)
 {
   if (tx_ongoing == -1)
@@ -1272,6 +1301,11 @@ bool rdcp_send_message_force(void)
 
   snprintf(buf, 256, "TX %s", b64msg);
   serial_writeln(buf);
+
+  rdcp_update_cfest_out(txq.entries[tx_ongoing].payload_length, 
+                        txq.entries[tx_ongoing].payload[10],
+                        txq.entries[tx_ongoing].payload[8]);
+  rdcp_txqueue_reschedule(1);
 
   return lora_radio_send(txq.entries[tx_ongoing].payload, txq.entries[tx_ongoing].payload_length);
 }
