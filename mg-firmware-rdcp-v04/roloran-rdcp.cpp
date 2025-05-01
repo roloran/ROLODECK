@@ -38,6 +38,20 @@ int32_t bad_crc_counter = 0;
 uint16_t most_recent_airtime = 0;
 uint8_t most_recent_future_timeslots = 0;
 
+uint8_t cire_retry = 0;     // How often did we already try to send a CIRE?
+int64_t cire_starttime = 0; // When was the CIRE sent?
+#define CIRE_STATE_NONE    0
+#define CIRE_STATE_WAIT_DA 1
+#define CIRE_STATE_WAIT_HQ 2
+uint8_t  cire_state = CIRE_STATE_NONE;
+uint16_t cire_seqnrs[]= {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0};
+uint16_t cire_current_seqnr = 0x0000;
+uint8_t  cire_current_subtype = 0x00;
+uint16_t cire_current_refnr = 0x0000;
+char     cire_current_text[256];
+uint16_t cire_guitext_num = 1;
+uint16_t cire_current_ep = 0x0000;
+
 int64_t rdcp_get_channel_free_estimation(void)
 {
   return CFEst;
@@ -757,6 +771,15 @@ void rdcp_mg_process_incoming_message(void)
   if (mt == RDCP_MSGTYPE_MAINTENANCE) rdcp_mg_process_maintenance();
   if (mt == RDCP_MSGTYPE_DEVICE_BLOCK_ALERT) rdcp_mg_process_blockalert();
 
+  if ((mt == RDCP_MSGTYPE_CITIZEN_REPORT) && 
+      (rdcp_msg_in.header.origin == getMyRDCPAddress()) &&
+      (rdcp_msg_in.header.sender == cire_current_ep) &&
+      (cire_state == CIRE_STATE_WAIT_DA)
+  )
+  { /* Fallback if we missed the real EP DA ACK */
+    rdcp_cire_ack(rdcp_msg_in.header.sender, rdcp_msg_in.header.sequence_number, RDCP_ACKNOWLEDGMENT_POSITIVE);
+  }
+
   return;
 }
 
@@ -1346,19 +1369,6 @@ bool rdcp_callback_cad(bool cad_busy)
   return false;
 }
 
-uint8_t cire_retry = 0;     // How often did we already try to send a CIRE?
-int64_t cire_starttime = 0; // When was the CIRE sent?
-#define CIRE_STATE_NONE    0
-#define CIRE_STATE_WAIT_DA 1
-#define CIRE_STATE_WAIT_HQ 2
-uint8_t  cire_state = CIRE_STATE_NONE;
-uint16_t cire_seqnrs[]= {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0};
-uint16_t cire_current_seqnr = 0x0000;
-uint8_t  cire_current_subtype = 0x00;
-uint16_t cire_current_refnr = 0x0000;
-char     cire_current_text[256];
-uint16_t cire_guitext_num = 1;
-
 int get_cire_state(void) { return cire_state; }
 
 void rdcp_cire_callback(void)
@@ -1738,6 +1748,7 @@ void rdcp_send_cire(uint8_t subtype, uint16_t refnr, char *text)
   cire_current_seqnr = rm.header.sequence_number;
 
   uint16_t primary_ep = getSuggestedRelay(cire_retry); //getEntryPoint(cire_retry);
+  cire_current_ep = primary_ep;
   rm.header.relay1 = (uint8_t) ((primary_ep & 0x000F) * 8) + (uint8_t) 0x0;
   rm.header.relay2 = 0xEE;
   rm.header.relay3 = 0xEE;
