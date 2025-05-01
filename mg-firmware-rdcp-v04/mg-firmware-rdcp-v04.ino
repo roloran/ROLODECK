@@ -177,6 +177,8 @@ void loop(void)
     if (is_screensaver_on()) mb_check_lifetime_and_update_display(true, true); // lifetime check blocks device for several seconds, only do it with screensaver on
     rdcp_blockdevice_check();
 
+    rdcp_dump_queues();
+
     free_heap = ESP.getFreeHeap();
     min_free_heap = ESP.getMinFreeHeap();
     if ((free_heap < old_free_heap) || (min_free_heap < old_min_free_heap))

@@ -1029,6 +1029,55 @@ void rdcp_dump_queues(void)
   return;
 }
 
+void rdcp_txqueue_compress(void)
+{
+  int64_t now = my_millis();
+
+  if (now > rdcp_get_channel_free_estimation() + 10000)
+  { /* Channel is unused for more than 10 seconds; check whether we have something to send earlier. */
+    bool has_forced_entry = false;
+    int earliest = -1;
+    for (int i=0; i < MAX_TXQUEUE_ENTRIES; i++)
+    {
+      if (txq.entries[i].waiting)
+      { 
+        if ((txq.entries[i].force_tx) || 
+            (txq.entries[i].in_process))
+        { 
+          has_forced_entry = true; 
+        }
+        if ((earliest == -1) || 
+            (txq.entries[i].currently_scheduled_time < txq.entries[earliest].currently_scheduled_time))
+        {
+          earliest = i;
+        }
+      }
+    }
+    if (has_forced_entry) return; // Skip compression to avoid clash with hard-scheduled messages
+    if (earliest == -1) return;   // No entry found to send earlier
+
+    int64_t delta = txq.entries[earliest].currently_scheduled_time - now;
+    if (delta > 30000)
+    {
+      for (int i=0; i < MAX_TXQUEUE_ENTRIES; i++)
+      {
+        if (txq.entries[i].waiting)
+        { 
+          if (txq.entries[i].force_tx) { continue; }   // should not happen if we reach this code
+          if (txq.entries[i].in_process) { continue; } // same
+          txq.entries[i].currently_scheduled_time -= delta; 
+          char info[256];
+          snprintf(info, 256, "INFO: Compressed TXQ entry %d by moving it %" PRId64 " ms",
+            i, delta);
+          serial_writeln(info);
+        }
+      }
+    }
+  }
+
+  return;
+}
+
 bool rdcp_txqueue_loop(void)
 {
   int64_t now = my_millis();
@@ -1051,6 +1100,7 @@ bool rdcp_txqueue_loop(void)
 
   last_tx_activity = now;
 
+  rdcp_txqueue_compress();
   /* Feed fresh messages into our queue */
   rdcp_txaheadqueue_loop();
 

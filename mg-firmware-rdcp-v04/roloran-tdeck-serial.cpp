@@ -212,6 +212,8 @@ void serial_process_command(String s, String processing_mode, bool persist_selec
       }
       int cirestate = get_cire_state();
 
+      rdcp_dump_queues();
+
       snprintf(status, 256, "STATUS: T %" PRId64 " ms, rCF %" PRId64 " ms, Q %d/%d, R %04X, CPU %d MHz, clk %s, CIREstate %d", now, cfdelta, txqe, txaqe, roam, get_cpufreq(), timestamp, cirestate);
       serial_writeln(status);
     }
