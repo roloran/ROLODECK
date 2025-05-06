@@ -11,6 +11,7 @@
 #include "tdeck_gui.h"
 #include "roloran-board.h"
 #include "roloran-audio.h"
+#include <BleSerial.h> 
 
 uint16_t LEN = 512;
 uint8_t  MY_SERIAL_MODE = SERIAL_MODE_SILENT;
@@ -22,6 +23,9 @@ int64_t  simrx_timestamp = 0;
 
 bool pre_banner_mode = true;
 String SERIAL_NOTE = "";
+
+BleSerial SerialBT;
+bool bt_enabled = false;
 
 void set_serial_note(String s)
 {
@@ -64,17 +68,17 @@ void serial_banner(void)
   pre_banner_mode = false;
   Serial.println(SERIAL_PREFIX "INFO: Firmware for scenario " FW_SCENARIO ", RDCP " FW_RDCP ", build " FW_VERSION ", " __DATE__ " " __TIME__);
   char buf[LEN];
-  snprintf(buf, LEN, "%sINFO: Device RDCP AD: %04X\0",        SERIAL_PREFIX, getMyRDCPAddress()); Serial.println(buf);
-  snprintf(buf, LEN, "%sINFO: Device RDCP EP: %04X %04X %04X %04X %04X\0",         SERIAL_PREFIX, getEntryPoint(0), getEntryPoint(1), getEntryPoint(2), getEntryPoint(3), getEntryPoint(4)); Serial.println(buf);
-  snprintf(buf, LEN, "%sINFO: Device RDCP MC: %04X %04X %04X %04X %04X\0",         SERIAL_PREFIX, getMulticastAddress(0), getMulticastAddress(1), getMulticastAddress(2), getMulticastAddress(3), getMulticastAddress(4)); Serial.println(buf);
-  snprintf(buf, LEN, "%sINFO: Device LoRa FQ: %.3f MHz\0",    SERIAL_PREFIX, getMyLoRaFrequency()); Serial.println(buf);
-  snprintf(buf, LEN, "%sINFO: Device LoRa BW: %3.0f kHz\0",   SERIAL_PREFIX, getMyLoRaBandwidth()); Serial.println(buf);
-  snprintf(buf, LEN, "%sINFO: Device LoRa SF: %2d\0",         SERIAL_PREFIX, getMyLoRaSpreadingFactor()); Serial.println(buf);
-  snprintf(buf, LEN, "%sINFO: Device LoRa CR: 4/%d\0",        SERIAL_PREFIX, getMyLoRaCodingRate()); Serial.println(buf);
-  snprintf(buf, LEN, "%sINFO: Device LoRa SW: 0x%02X\0",      SERIAL_PREFIX, getMyLoRaSyncWord()); Serial.println(buf);
-  snprintf(buf, LEN, "%sINFO: Device LoRa PW: %2d dBm\0",     SERIAL_PREFIX, getMyLoRaPower()); Serial.println(buf);
-  snprintf(buf, LEN, "%sINFO: Device LoRa PL: %2d symbols\0", SERIAL_PREFIX, getMyLoRaPreambleLength()); Serial.println(buf);
-  snprintf(buf, LEN, "%sINFO: Device SerMode: %d\0",          SERIAL_PREFIX, MY_SERIAL_MODE); Serial.println(buf);
+  snprintf(buf, LEN, "%sINFO: Device RDCP AD: %04X\0",        SERIAL_PREFIX, getMyRDCPAddress()); Serial.println(buf); if (bt_enabled) SerialBT.println(buf);
+  snprintf(buf, LEN, "%sINFO: Device RDCP EP: %04X %04X %04X %04X %04X\0",         SERIAL_PREFIX, getEntryPoint(0), getEntryPoint(1), getEntryPoint(2), getEntryPoint(3), getEntryPoint(4)); Serial.println(buf); if (bt_enabled) SerialBT.println(buf);
+  snprintf(buf, LEN, "%sINFO: Device RDCP MC: %04X %04X %04X %04X %04X\0",         SERIAL_PREFIX, getMulticastAddress(0), getMulticastAddress(1), getMulticastAddress(2), getMulticastAddress(3), getMulticastAddress(4)); Serial.println(buf); if (bt_enabled) SerialBT.println(buf);
+  snprintf(buf, LEN, "%sINFO: Device LoRa FQ: %.3f MHz\0",    SERIAL_PREFIX, getMyLoRaFrequency()); Serial.println(buf); if (bt_enabled) SerialBT.println(buf);
+  snprintf(buf, LEN, "%sINFO: Device LoRa BW: %3.0f kHz\0",   SERIAL_PREFIX, getMyLoRaBandwidth()); Serial.println(buf); if (bt_enabled) SerialBT.println(buf);
+  snprintf(buf, LEN, "%sINFO: Device LoRa SF: %2d\0",         SERIAL_PREFIX, getMyLoRaSpreadingFactor()); Serial.println(buf); if (bt_enabled) SerialBT.println(buf);
+  snprintf(buf, LEN, "%sINFO: Device LoRa CR: 4/%d\0",        SERIAL_PREFIX, getMyLoRaCodingRate()); Serial.println(buf); if (bt_enabled) SerialBT.println(buf);
+  snprintf(buf, LEN, "%sINFO: Device LoRa SW: 0x%02X\0",      SERIAL_PREFIX, getMyLoRaSyncWord()); Serial.println(buf); if (bt_enabled) SerialBT.println(buf);
+  snprintf(buf, LEN, "%sINFO: Device LoRa PW: %2d dBm\0",     SERIAL_PREFIX, getMyLoRaPower()); Serial.println(buf); if (bt_enabled) SerialBT.println(buf);
+  snprintf(buf, LEN, "%sINFO: Device LoRa PL: %2d symbols\0", SERIAL_PREFIX, getMyLoRaPreambleLength()); Serial.println(buf); if (bt_enabled) SerialBT.println(buf);
+  snprintf(buf, LEN, "%sINFO: Device SerMode: %d\0",          SERIAL_PREFIX, MY_SERIAL_MODE); Serial.println(buf); if (bt_enabled) SerialBT.println(buf);
   return;
 }
 
@@ -91,10 +95,18 @@ bool serial_write(String s, bool use_prefix)
     if (use_prefix == true)
     {
       Serial.print(SERIAL_NOTE + SERIAL_PREFIX + s);
+      if (bt_enabled)
+      {
+        SerialBT.print(SERIAL_NOTE + SERIAL_PREFIX + s);  
+      }
     }
     else
     {
       Serial.print(s);
+      if (bt_enabled)
+      {
+        SerialBT.print(s);  
+      }
     }
     Serial.flush();
     xSemaphoreGive(highlander);
@@ -138,6 +150,15 @@ void serial_string_to_unishox(String s, bool add_newline)
 
 String serial_readln(void)
 {
+  if (bt_enabled)
+  {
+    if (SerialBT.available())
+    {
+      char buf[512];
+      auto count = SerialBT.readBytes((uint8_t *) buf, 512);
+      if (count >= 1) return String(buf);
+    }
+  }
   return Serial.readString();
 }
 
@@ -151,6 +172,28 @@ uint16_t serial_copy_received_message(uint8_t *destination)
   new_simrx_available = false;
   memcpy(destination, simrx_buffer, simrx_buffer_length);
   return simrx_buffer_length;
+}
+
+void serial_enable_bt(void)
+{
+  if (bt_enabled) return;
+  bt_enabled = true;
+
+  char btdevicename[128];
+  snprintf(btdevicename, 128, "RDCP-MG-%04X", getMyRDCPAddress());
+  SerialBT.begin(btdevicename);
+  SerialBT.setTimeout(10);
+
+  serial_writeln(btdevicename);
+
+  return;
+}
+
+void serial_disable_bt(void)
+{
+  if (!bt_enabled) return;
+  bt_enabled = false;
+  return;
 }
 
 #define MODE_REGULAR 0
@@ -786,6 +829,18 @@ void serial_process_command(String s, String processing_mode, bool persist_selec
       snprintf(b, 256, "INFO: Setting this device's wallclock time");
       serial_writeln(b);
       tdeck_set_time(2025 + year, month, day, hour, minute);
+    }
+    else if (s_uppercase.startsWith("BTENABLE"))
+    {
+      serial_enable_bt();
+      serial_writeln("INFO: Enabled");
+      if (persist_selected_commands) persist_serial_command_for_replay(s);
+    }
+    else if (s_uppercase.startsWith("BTDISABLE"))
+    {
+      serial_disable_bt();
+      serial_writeln("INFO: Disabled");
+      if (persist_selected_commands) persist_serial_command_for_replay(s);
     }
     else if (s_uppercase.startsWith("UNLOCK ") || s_uppercase.startsWith("RINGTONE "))
     {
