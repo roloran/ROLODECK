@@ -252,16 +252,29 @@ bool persistence_checkset_nonce(char *name, uint16_t nonce)
     {
       line = f.readString();
     }
-    int old_nonce = line.toInt();
+    uint16_t old_nonce = line.toInt();
     f.close();
 
-    if (old_nonce < nonce) is_valid = true;
+    if (old_nonce < nonce)
+    { 
+      is_valid = true;
+    }
+    else 
+    {
+      char info[256];
+      snprintf(info, 256, "WARNING: Old nonce == %" PRIu16 ", new nonce == %" PRIu16, old_nonce, nonce);
+      serial_writeln(info);
+    }
   }
 
   if (is_valid)
   {
     f = LittleFS.open(filename, FILE_WRITE);
-    if (!f) is_valid = false; // cannot persist nonce, don't trust it
+    if (!f)
+    {
+      serial_writeln("ERROR: Cannot persist nonce");
+      is_valid = false; // cannot persist nonce, don't trust it
+    }
 
     char content[256];
     snprintf(content, 256, "%" PRIu16 "\n", nonce);
