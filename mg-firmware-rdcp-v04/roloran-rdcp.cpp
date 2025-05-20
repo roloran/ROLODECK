@@ -2336,23 +2336,36 @@ void rdcp_mg_process_maintenance(void)
 {
   bool valid = false;
 
-  if (rdcp_msg_in.header.rdcp_payload_length != RDCP_SIGNATURE_LENGTH)
+  if (rdcp_msg_in.header.rdcp_payload_length != 2 + RDCP_SIGNATURE_LENGTH)
   {
     serial_writeln("WARNING: MAINTENANCE message has invalid payload length");
     return;
   }
 
   uint8_t sha[32];
-  get_inline_hash(&rdcp_msg_in, 0, sha);
+  get_inline_hash(&rdcp_msg_in, 2, sha);
 
   uint8_t sig[128];
-  for (int i=0; i<65; i++) sig[i] = rdcp_msg_in.payload.data[0+i];
+  for (int i=0; i<65; i++) sig[i] = rdcp_msg_in.payload.data[2+i];
 
   valid = schnorr_verify_signature(sha, 32, sig);
   if (valid)
   {
+    uint16_t nonce = rdcp_msg_in.payload.data[0] + 256 * rdcp_msg_in.payload.data[1];
+
+    if (!persistence_checkset_nonce("devmaint", nonce))
+    {
+      serial_writeln("WARNING: Invalid nonce received for signed RDCP DEVICE MAINTENANCE");
+      return;
+    }
+    else 
+    {
+      serial_writeln("INFO: Entering Maintenance mode");
+    }
+
     gui_transition_to_screen(SCREEN_MAINTENANCE);
     serial_set_serial_mode(SERIAL_MODE_FULLACCESS);
+
   }
   else
   {
