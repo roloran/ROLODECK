@@ -198,6 +198,88 @@ void print_rdcp_csv(void)
   return;
 }
 
+bool repeater_mode = false;
+
+void rdcp_repeater(void)
+{
+  if (!repeater_mode) return;
+  /* 
+    In repeater mode, we send selected non-duplicate incoming RDCP Messages
+    on the same channel again when it is free.
+    As this can up to double the load on the channel in our range, it should 
+    be used very sparsely on only very few devices. 
+    When used with a 433 MHz T-Deck, it can be used for testing new or additional 
+    DA placements. Prefer to use a proper RDCP Relay with appropriately 
+    configured topology whenever possible. 
+    For 868 MHz MGs, this functionality may extend the range of coverage 
+    when households are too far away from their nearest DA/Relay. However,
+    this will only work as expected for stationary use. Mobile use 
+    except for placement testing should be avoided.
+  */
+
+  /* Do not repeat the following message types */
+  if (
+    (rdcp_msg_in.header.message_type == RDCP_MSGTYPE_DA_STATUS_REQUEST) ||
+    (rdcp_msg_in.header.message_type == RDCP_MSGTYPE_DA_STATUS_RESPONSE) ||
+    (rdcp_msg_in.header.message_type == RDCP_MSGTYPE_DELIVERY_RECEIPT) || 
+    (rdcp_msg_in.header.message_type == RDCP_MSGTYPE_FETCH_ALL_NEW_MESSAGES) ||
+    (rdcp_msg_in.header.message_type == RDCP_MSGTYPE_FETCH_MESSAGE) ||
+    (rdcp_msg_in.header.message_type == RDCP_MSGTYPE_HEARTBEAT) ||
+    (rdcp_msg_in.header.message_type == RDCP_MSGTYPE_MAINTENANCE)
+  )
+  {
+    serial_writeln("INFO: Ignoring message in Repeater mode");
+    return;
+  }
+
+  serial_writeln("INFO: Processing message in Repeater mode");
+
+  struct rdcp_message rm;
+
+  /* Copy the message and adjust header fields */
+  rm.header.sender = getMyRDCPAddress();
+  rm.header.origin = rdcp_msg_in.header.origin;
+  rm.header.sequence_number = rdcp_msg_in.header.sequence_number;
+  rm.header.destination = rdcp_msg_in.header.destination;
+  rm.header.message_type = rdcp_msg_in.header.message_type;
+  rm.header.rdcp_payload_length = rdcp_msg_in.header.rdcp_payload_length;
+  rm.header.counter = 0; /* one-shot only */
+  if (getMyLoRaFrequency() < 500)
+  { // don't re-start interrupted propagation cycles on the 433 MHz band
+    rm.header.relay1 = 0xEE; 
+    rm.header.relay2 = 0xEE; 
+    rm.header.relay3 = 0xEE; 
+  }
+  else 
+  {
+    rm.header.relay1 = rdcp_msg_in.header.relay1;
+    rm.header.relay2 = rdcp_msg_in.header.relay2;
+    rm.header.relay3 = rdcp_msg_in.header.relay3;
+  }
+  for (int i=0; i<rm.header.rdcp_payload_length; i++)
+    rm.payload.data[i] = rdcp_msg_in.payload.data[i];
+
+  /* Set the CRC header field */
+  uint8_t data_for_crc[256];
+  memcpy(&data_for_crc, &rm.header, RDCP_HEADER_SIZE - 2);
+  for (int i=0; i < rm.header.rdcp_payload_length; i++)
+  {
+    data_for_crc[i + RDCP_HEADER_SIZE - 2] = rm.payload.data[i];
+  }
+  uint16_t actual_crc = crc16(data_for_crc, RDCP_HEADER_SIZE - 2 + rm.header.rdcp_payload_length);
+  rm.header.checksum = actual_crc;
+
+  /* Schedule the outgoing message for sending */
+  uint8_t data[256];
+  memcpy(&data, &rm.header, RDCP_HEADER_SIZE);
+  for (int i=0; i<rm.header.rdcp_payload_length; i++) 
+    data[i + RDCP_HEADER_SIZE] = rm.payload.data[i];
+  rdcp_txqueue_add(data, RDCP_HEADER_SIZE + rm.header.rdcp_payload_length, 
+                   NOTIMPORTANT, NOTFORCEDTX, TX_CALLBACK_NONE, 0);
+
+  return;
+}
+
 uint16_t most_recent_origin = 0x0000;
 uint16_t most_recent_seqnr  = 0x0000;
 
@@ -251,8 +333,10 @@ bool rdcp_mg_process_rxed_lora_packet(uint8_t *lora_packet, uint16_t lora_packet
   print_rdcp_csv();
 
   /* Check for RDCP message duplicate */
+  bool is_duplicate = false;
   if (rdcp_check_duplicate_message(rdcp_msg_in.header.origin, rdcp_msg_in.header.sequence_number) == true)
   {
+    is_duplicate = true;
     if (rdcp_ignore_duplicates == false)
     {
       char buf[256];
@@ -289,6 +373,9 @@ bool rdcp_mg_process_rxed_lora_packet(uint8_t *lora_packet, uint16_t lora_packet
   */
   if ((rdcp_msg_in.header.message_type == RDCP_MSGTYPE_CITIZEN_REPORT) &&
       (rdcp_msg_in.header.sender >= 0x0300)) rdcp_update_channel_free_estimation(CFEst + 60000);
+
+  /* Repeat the RDCP Message if the device is configured accordingly. */
+  if (!is_duplicate) rdcp_repeater();
 
   rdcp_mg_process_incoming_message();
 
