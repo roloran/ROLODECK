@@ -20,6 +20,7 @@ bool     new_simrx_available = false;
 uint8_t  simrx_buffer[BUFLEN];
 uint16_t simrx_buffer_length = 0;
 int64_t  simrx_timestamp = 0;
+extern   bool repeater_mode;
 
 bool pre_banner_mode = true;
 String SERIAL_NOTE = "";
@@ -427,6 +428,19 @@ void serial_process_command(String s, String processing_mode, bool persist_selec
     {
       serial_writeln("INFO: Restarting device");
       ESP.restart();
+    }
+    else if (s_uppercase.startsWith("REPEATER"))
+    {
+      repeater_mode = !repeater_mode;
+      if (repeater_mode)
+      {
+        serial_writeln("INFO: Repeater mode activated");
+      }
+      else 
+      {
+        serial_writeln("INFO: Repeater mode deactivated");
+      }
+      if (persist_selected_commands) persist_serial_command_for_replay(s);
     }
     else if (s_uppercase.startsWith("RDCPIDUP"))
     {
