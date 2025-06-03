@@ -3,6 +3,7 @@
 
 #include <Arduino.h>
 #include "roloran-crypto.h"
+#include "settings-scenario.h"
 
 /// RDCP v0.4 fixed header size
 #define RDCP_HEADER_SIZE 16
@@ -155,9 +156,9 @@ bool rdcp_mg_process_rxed_lora_packet(uint8_t *lora_packet, uint16_t lora_packet
   * Data structure for Duplicate Table entries
   */
 struct rdcp_dup_table_entry {
-  uint16_t origin = 0x0000;          //< Origin from the RDCP Header
-  uint16_t sequence_number = 0x0000; //< SequenceNumber from the RDCP Header
-  int64_t last_seen = 0;             //< Timestamp of when the entry was last updated
+  uint16_t origin = RDCP_NO_ADDRESS; //< Origin from the RDCP Header
+  uint16_t sequence_number = RDCP_NO_SEQUENCE_NUMBER; //< SequenceNumber from the RDCP Header
+  int64_t last_seen = NO_TIMESTAMP;  //< Timestamp of when the entry was last updated
 };
 
 /**
@@ -286,13 +287,13 @@ bool rdcp_txqueue_loop(void);
 struct txqueue_entry {
   uint8_t payload[RDCP_HEADER_SIZE + RDCP_MAX_PAYLOAD_SIZE];       //< data of the outgoing message
   uint8_t payload_length = 0;                   //< length of the outgoing message
-  int64_t currently_scheduled_time = 0;         //< timestamp when to transmit
-  int64_t originally_scheduled_time = 0;        //< timestamp when originally planned to transmit
+  int64_t currently_scheduled_time = NO_TIMESTAMP;         //< timestamp when to transmit
+  int64_t originally_scheduled_time = NO_TIMESTAMP;        //< timestamp when originally planned to transmit
   uint8_t num_of_reschedules = 0;               //< how often the entry has already been rescheduled
   bool important = false;                       //< message is important and should not be dropped even it if takes longer
   bool force_tx = false;                        //< indicator whether message should be sent independend of CAD status
   uint8_t callback_selector = TX_CALLBACK_NONE; //< which callback function to use when TX is finished
-  int64_t timeslot_duration =  0;               //< timeslot duration in milliseconds including retransmissions
+  int64_t timeslot_duration =  NO_DURATION;               //< timeslot duration in milliseconds including retransmissions
   uint8_t cad_retry = 0;                        //< CAD retry attempt number
   bool waiting = false;                         //< message is still waiting to be sent
   bool in_process = false;                      //< this message is currently being processed
@@ -329,7 +330,7 @@ bool rdcp_txaheadqueue_add(uint8_t *data, uint8_t len, bool important, bool forc
 struct txaheadqueue_entry {
   uint8_t payload[RDCP_MAX_PAYLOAD_SIZE];       //< data of the outgoing message
   uint8_t payload_length = 0;                   //< length of the outgoing message
-  int64_t scheduled_time = 0;                  //< timestamp when to move to the TX Queue
+  int64_t scheduled_time = NO_TIMESTAMP;        //< timestamp when to move to the TX Queue
   bool important = false;                       //< message is important and should not be dropped even it if takes longer
   bool force_tx = false;                        //< indicator whether message should be sent independend of CAD status
   uint8_t callback_selector = TX_CALLBACK_NONE; //< which callback function to use when TX is finished

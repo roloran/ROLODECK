@@ -19,7 +19,7 @@ static RadioEvents_t RadioEvents;
 hw_config            hwConfig;
 uint8_t              cad_repeat = 0;
 int64_t              tx_time = 0;
-int64_t              rx_timestamp = 0;
+int64_t              rx_timestamp = NO_TIMESTAMP;
 
 volatile bool        has_message_to_send = false;
 uint8_t              outgoing_message[BUFFER_SIZE];
@@ -29,7 +29,7 @@ volatile bool        ongoing_transmission = false;
 volatile bool        has_received_message = false;
 volatile bool        do_start_send = false;
 volatile bool        tx_finished = false;
-int64_t              tx_wallclock_time = 0;
+int64_t              tx_wallclock_time = NO_DURATION;
 uint8_t              cad_stats_tries = 0;
 bool                 has_timeout_tx = false;
 bool                 has_timeout_rx = false;
@@ -45,7 +45,7 @@ bool                 new_message_available = false;
 bool                 new_cad_result_available = false;
 bool                 new_cad_result_busy = false;
 bool                 has_txed = false;
-int64_t              has_txed_timestamp = 0;
+int64_t              has_txed_timestamp = NO_TIMESTAMP;
 
 /**
  * @return int64_t Current monotonic clock time in milliseconds. 
@@ -148,7 +148,7 @@ void radio_setup(void)
   uint8_t  LORA_SYMBOL_TIMEOUT = 0;
   bool     LORA_FIX_LENGTH_PAYLOAD_ON = false;
   bool     LORA_IQ_INVERSION_ON = false;
-  uint16_t TX_TIMEOUT_VALUE = 30000;
+  uint16_t TX_TIMEOUT_VALUE = 30 * SECONDS_TO_MILLISECONDS;
 
 	Radio.SetTxConfig(MODEM_LORA, TX_OUTPUT_POWER, 0, LORA_BANDWIDTH,
 	                  LORA_SPREADING_FACTOR, LORA_CODINGRATE,
@@ -182,7 +182,7 @@ void radio_apply_new_configuration(void)
   radio_setup();
 }
 
-char current_rdcp_msg_base64[512];           // Base64-encoded version of currently processed message
+char current_rdcp_msg_base64[FATLEN];           // Base64-encoded version of currently processed message
 char *get_current_rdcp_msg_base64(void) { return current_rdcp_msg_base64; }
 void set_current_rdcp_msg_base64(char *m64)
 {
@@ -221,18 +221,8 @@ void radio_loop()
     char encodedString[encodedLength + 1];
     Base64ren.encode(encodedString, (char *) receive_buffer, receive_buffer_length);
     serial_writeln("RX " + String(encodedString));
-    snprintf(current_rdcp_msg_base64, 512, "%s\0", encodedString);
+    snprintf(current_rdcp_msg_base64, FATLEN, "%s\0", encodedString);
   }
-
-  /* obsolete with scheduler
-  if (do_start_send == true)
-  {
-    do_start_send = false;
-    serial_writeln("INFO: CAD reports free channel on try #" + String(cad_stats_tries) + " (" + String(cad_stats_time) + " ms), starting to transmit (length " + String(outgoing_message_size) + " bytes)");
-    tx_time = timeNow();
-		Radio.Send(outgoing_message, outgoing_message_size);
-  }
-  */
 
   if (has_timeout_tx == true)
   {
@@ -263,23 +253,6 @@ void radio_loop()
     Radio.Standby();
     rdcp_callback_cad(new_cad_result_busy);
   }
-
-	/* Check for a queued outgoing, non-empty LoRa packet. */
-  /* obsolete with scheduler.
-	if ((has_message_to_send == true) && (outgoing_message_size > 0) && (ongoing_transmission == false))
-	{
-    serial_writeln("INFO: Radio loop has message to send");
-		cad_time = timeNow();
-		has_message_to_send = false;
-		ongoing_transmission = true;
-
-		Radio.Standby();
-    delay(5);
-		Radio.SetCadParams(LORA_CAD_08_SYMBOL, getMyLoRaSpreadingFactor() + 13, 10, LORA_CAD_ONLY, 0);
-    delay(5);
-		Radio.StartCad(); // listen-before-talk / channel activity detection. Send message when channel is free.
-	}
-  */
 
 	return;
 }

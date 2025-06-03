@@ -7,6 +7,7 @@
 #include "roloran-rdcp.h"
 #include "roloran-tdeck-hal.h"
 #include "roloran-board.h"
+#include "settings-scenario.h"
 
 uint8_t my_previous_screen = SCREEN_SPLASH;
 uint8_t my_current_screen = SCREEN_SPLASH;
@@ -165,22 +166,22 @@ void gui_callback_cire(lv_event_t *e)
       /* Prepare CIRE textual content */
       s_who.replace("#", "*");
       s_what.replace("#", "*");
-      char c_who[256], c_what[256];
-      s_who.toCharArray(c_who, 256);
-      s_what.toCharArray(c_what, 256);
+      char c_who[DATABUFLEN], c_what[DATABUFLEN];
+      s_who.toCharArray(c_who, DATABUFLEN);
+      s_what.toCharArray(c_what, DATABUFLEN);
 
-      char ciretext[256];
-      snprintf(ciretext, 256, "%s#%s#%d", c_who, c_what, category);
+      char ciretext[DATABUFLEN];
+      snprintf(ciretext, DATABUFLEN, "%s#%s#%d", c_who, c_what, category);
 
-      char info[256];
-      snprintf(info, 256, "INFO: Preparing CIRE: %s", ciretext);
+      char info[DATABUFLEN];
+      snprintf(info, DATABUFLEN, "INFO: Preparing CIRE: %s", ciretext);
       serial_writeln(info);
 
       uint16_t refnr = get_next_cire_nonce(getMyRDCPAddress());
       gui_disable_cire_buttons();
 
-      char gui_text[512];
-      snprintf(gui_text, 512, "\nIhre Nachricht (\"%s\") wird mit der Referenznummer %04X-%d gesendet. Bitte lassen Sie den Pager eingeschaltet und warten Sie auf weitere Informationen.", c_what, getMyRDCPAddress(), refnr);
+      char gui_text[FATLEN];
+      snprintf(gui_text, FATLEN, "\nIhre Nachricht (\"%s\") wird mit der Referenznummer %04X-%d gesendet. Bitte lassen Sie den Pager eingeschaltet und warten Sie auf weitere Informationen.", c_what, getMyRDCPAddress(), refnr);
       mb_add_local_message(gui_text, refnr, 0, 60002, true);
 
       lv_textarea_set_text(ui_TextAreaCIREFreetext, "");
@@ -219,20 +220,20 @@ void gui_callback_resp_submit(lv_event_t *e)
 
     if (enoughData)
     {
-      char ciretext[256];
-      s_freetext.toCharArray(ciretext, 256);
+      char ciretext[DATABUFLEN];
+      s_freetext.toCharArray(ciretext, DATABUFLEN);
 
-      char info[256];
-      snprintf(info, 256, "INFO: Preparing CIRE: %s", ciretext);
+      char info[DATABUFLEN];
+      snprintf(info, DATABUFLEN, "INFO: Preparing CIRE: %s", ciretext);
       serial_writeln(info);
 
       uint16_t refnr = get_current_inquiry_refnr();
       gui_switch_red_button_mode(RED_BUTTON_MODE_EMERGENCY);
       gui_disable_cire_buttons();
 
-      char gui_text[512];
-      snprintf(gui_text, 512, "\nIhre Antwort (\"%s\") wird mit der Referenznummer %04X-%04X gesendet. Bitte lassen Sie den Pager eingeschaltet und warten Sie auf weitere Informationen.", ciretext, getMyRDCPAddress(), refnr);
-      mb_add_local_message(gui_text, refnr, 0, 60002, true);
+      char gui_text[FATLEN];
+      snprintf(gui_text, FATLEN, "\nIhre Antwort (\"%s\") wird mit der Referenznummer %04X-%04X gesendet. Bitte lassen Sie den Pager eingeschaltet und warten Sie auf weitere Informationen.", ciretext, getMyRDCPAddress(), refnr);
+      mb_add_local_message(gui_text, refnr, 0, RDCP_TWO_DAYS, true);
 
       lv_textarea_set_text(ui_TextAreaRESPFreetext, "");
 
@@ -465,16 +466,16 @@ void gui_callback_emer_send(lv_event_t *e)
     s_who.replace("#", "*");
     s_where.replace("#", "*");
     s_what.replace("#", "*");
-    char c_who[256], c_where[256], c_what[256];
-    s_who.toCharArray(c_who, 256);
-    s_where.toCharArray(c_where, 256);
-    s_what.toCharArray(c_what, 256);
+    char c_who[DATABUFLEN], c_where[DATABUFLEN], c_what[DATABUFLEN];
+    s_who.toCharArray(c_who, DATABUFLEN);
+    s_where.toCharArray(c_where, DATABUFLEN);
+    s_what.toCharArray(c_what, DATABUFLEN);
 
-    char ciretext[256];
-    snprintf(ciretext, 256, "%s#%s#%s#%c", c_who, c_where, c_what, emer2state);
+    char ciretext[DATABUFLEN];
+    snprintf(ciretext, DATABUFLEN, "%s#%s#%s#%c", c_who, c_where, c_what, emer2state);
 
-    char info[256];
-    snprintf(info, 256, "INFO: Preparing CIRE: %s", ciretext);
+    char info[DATABUFLEN];
+    snprintf(info, DATABUFLEN, "INFO: Preparing CIRE: %s", ciretext);
     serial_writeln(info);
 
     uint16_t refnr = get_next_cire_nonce(getMyRDCPAddress());
@@ -484,9 +485,9 @@ void gui_callback_emer_send(lv_event_t *e)
     set_gui_needs_screen_refresh(true);
     for (int i=0; i<5; i++) tdeck_loop();
 
-    char gui_text[512];
-    snprintf(gui_text, 512, "Ihre Nachricht (\"%s\") wird mit der Referenznummer %04X-%d gesendet. Bitte lassen Sie den Pager eingeschaltet und warten Sie auf weitere Informationen.", c_what, getMyRDCPAddress(), refnr);
-    mb_add_local_message(gui_text, refnr, 0, 60002, true);
+    char gui_text[FATLEN];
+    snprintf(gui_text, FATLEN, "Ihre Nachricht (\"%s\") wird mit der Referenznummer %04X-%d gesendet. Bitte lassen Sie den Pager eingeschaltet und warten Sie auf weitere Informationen.", c_what, getMyRDCPAddress(), refnr);
+    mb_add_local_message(gui_text, refnr, 0, RDCP_TWO_DAYS, true);
 
     lv_textarea_set_text(ui_TextAreaEMERWhere, "");
     lv_textarea_set_text(ui_TextAreaEMERWhat, "");
@@ -664,10 +665,10 @@ void gui_callback_setup(void)
   lv_textarea_set_accepted_chars(ui_TextAreaOANonCrisis, "*");
 
   String owner = getOwnerDisplayName();
-  char owner_c[128];
+  char owner_c[INFOLEN];
   if (owner.length() > 3) 
   {
-    owner.toCharArray(owner_c, 128);
+    owner.toCharArray(owner_c, INFOLEN);
     lv_textarea_set_text(ui_TextAreaEMERWho, owner_c);
     lv_textarea_set_text(ui_TextAreaCIREWho, owner_c);
   }

@@ -10,5 +10,47 @@
 // Buffer time in ms for each sending/relaying timeslot
 #define OUR_RDCP_TIMESLOT_BUFFER 1000
 
+#define MINUTES_TO_MILLISECONDS 60000
+#define SECONDS_TO_MILLISECONDS  1000
+
+#define INFOLEN 256
+#define FATLEN  512
+
+#define RDCP_LOCAL_ORIGIN        0x0000
+#define RDCP_NO_ADDRESS          0x0000
+#define RDCP_NO_SEQUENCE_NUMBER  0x0000 
+#define RDCP_NO_REFERENCE_NUMBER 0x0000
+#define RDCP_ADDRESS_BROADCAST   0xFFFF
+
+#define CRC_SIZE 2
+
+#define RDCP_HEADER_RELAY_MAGIC_NONE 0xEE
+
+#define NO_TIMESTAMP 0 
+#define NO_DURATION  0
+
+#define SHABUFLEN 32
+#define SIGBUFLEN 128
+#define DATABUFLEN 256
+#define MINIBUFLEN 32
+
+#define SCHNORRPOINTLEN 33
+#define SCHNORRSIGLEN   32
+
+#define RDCP_ADDRESS_DA_LOWERBOUND 0x0200 
+#define RDCP_ADDRESS_MG_LOWERBOUND 0x0300
+#define RDCP_ADDRESS_BBKDA_LOWERBOUND 0x0100
+
+#define TX_WHEN_CF 0
+
+#define NRT_LOW    0
+#define NRT_MIDDLE 2 
+#define NRT_HIGH   4
+
+#define AESTAGSIZE 16
+#define ASCIIKEYLEN 32
+
+#define RDCP_TWO_DAYS 60002
+
 #endif
 /* EOF */

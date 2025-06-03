@@ -4,6 +4,7 @@
 #include "roloran-crypto.h"
 #include "roloran-tdeck-hal.h"
 #include <LittleFS.h> 
+#include "settings-scenario.h"
 
 /**
  * Settings that should be unique for each device
@@ -56,7 +57,7 @@ void addMyEntryPoint(uint16_t ep)
   bool added = false;
   for (int i=0; i<5; i++)
   {
-    if (MY_ENTRY_POINTS[i] == 0x0000)
+    if (MY_ENTRY_POINTS[i] == RDCP_NO_ADDRESS)
     {
       MY_ENTRY_POINTS[i] = ep;
       added = true;
@@ -75,7 +76,7 @@ void addMyMulticastAddress(uint16_t ma)
   bool added = false;
   for (int i=0; i<5; i++)
   {
-    if (MY_MULTICAST_ADDRESSES[i] == 0x0000)
+    if (MY_MULTICAST_ADDRESSES[i] == RDCP_NO_ADDRESS)
     {
       MY_MULTICAST_ADDRESSES[i] = ma;
       added = true;
@@ -105,14 +106,14 @@ uint16_t getEntryPoint(uint8_t num)
 
 uint16_t getSuggestedRelay(uint8_t retry=0)
 {
-  uint16_t roam = getRoamingRecommendation(1000*60*15);
-  if ((retry == 0) && (roam != 0x0000)) return roam;
+  uint16_t roam = getRoamingRecommendation(MINUTES_TO_MILLISECONDS*15);
+  if ((retry == 0) && (roam != RDCP_NO_ADDRESS)) return roam;
   uint8_t index = 0;
   uint16_t da = getEntryPoint(index);
   for (int i=0; i<retry; i++)
   {
     uint16_t new_da = getEntryPoint(index%5);
-    if (new_da != 0x0000) da = new_da;
+    if (new_da != RDCP_NO_ADDRESS) da = new_da;
   }
   return da;
 }
@@ -128,7 +129,7 @@ bool matchesMyDeviceAddress(uint16_t rdcpa)
 
 bool matchesAnyOfMyAddresses(uint16_t rdcpa)
 {
-  return ((rdcpa == 0xFFFF) || matchesMyDeviceAddress(rdcpa) || matchesMyMulticastAddress(rdcpa));
+  return ((rdcpa == RDCP_ADDRESS_BROADCAST) || matchesMyDeviceAddress(rdcpa) || matchesMyMulticastAddress(rdcpa));
 }
 
 void clearMyMulticastAddresses(void)
@@ -156,11 +157,11 @@ String getOwnerDisplayName(void)
   return OwnerDisplayName;
 }
 
-uint8_t HQsharedSecret[32];
+uint8_t HQsharedSecret[ASCIIKEYLEN];
 
 void setHQsharedSecret(uint8_t *secret)
 {
-  for (int i=0; i<32; i++) HQsharedSecret[i] = secret[i];
+  for (int i=0; i<ASCIIKEYLEN; i++) HQsharedSecret[i] = secret[i];
   return;
 }
 
@@ -169,13 +170,13 @@ uint8_t* getHQsharedSecret(void)
   return HQsharedSecret;
 }
 
-char HQschnorrPublicKey[256];
-char MYschnorrPublicKey[256];
-char MYschnorrPrivateKey[256];
+char HQschnorrPublicKey[DATABUFLEN];
+char MYschnorrPublicKey[DATABUFLEN];
+char MYschnorrPrivateKey[DATABUFLEN];
 
 void  setHQpublicKey(char *pubkey)
 { 
-  snprintf(HQschnorrPublicKey, 256, "%s\0", pubkey);
+  snprintf(HQschnorrPublicKey, DATABUFLEN, "%s\0", pubkey);
   return;
 }
 
@@ -186,7 +187,7 @@ char* getHQpublicKey(void)
 
 void setMyPublicKey(char *pubkey)
 {
-  snprintf(MYschnorrPublicKey, 256, "%s\0", pubkey); 
+  snprintf(MYschnorrPublicKey, DATABUFLEN, "%s\0", pubkey); 
   return;
 }
 
@@ -197,7 +198,7 @@ char* getMyPublicKey(void)
 
 void setMyPrivateKey(char *privkey)
 {
-  snprintf(MYschnorrPrivateKey, 256, "%s\0", privkey); 
+  snprintf(MYschnorrPrivateKey, DATABUFLEN, "%s\0", privkey); 
   return;
 }
 
@@ -206,22 +207,22 @@ char* getMyPrivateKey(void)
   return MYschnorrPrivateKey;
 }
 
-uint8_t unlockHash1[32];
-uint8_t unlockHash2[32];
+uint8_t unlockHash1[SHABUFLEN];
+uint8_t unlockHash2[SHABUFLEN];
 bool unlockHash1set = false;
 bool unlockHash2set = false;
 
 void setUnlockHash1(uint8_t *s)
 {
   unlockHash1set = true;
-  for (int i=0; i<32; i++) unlockHash1[i] = s[i];
+  for (int i=0; i<SHABUFLEN; i++) unlockHash1[i] = s[i];
   return;
 }
 
 void setUnlockHash2(uint8_t *s)
 {
   unlockHash2set = true;
-  for (int i=0; i<32; i++) unlockHash2[i] = s[i];
+  for (int i=0; i<SHABUFLEN; i++) unlockHash2[i] = s[i];
   return;
 }
 
@@ -229,26 +230,26 @@ uint8_t checkUnlockHash(String s)
 {
   uint8_t result = SERIAL_MODE_SILENT;
 
-  char input[128];
-  s.toCharArray(input, 128);
+  char input[INFOLEN];
+  s.toCharArray(input, INFOLEN);
 
   SHA256 h = SHA256();
   h.reset();
   h.update(input, strlen(input));
-  uint8_t sha[32];
-  h.finalize(sha, 32);
+  uint8_t sha[SHABUFLEN];
+  h.finalize(sha, SHABUFLEN);
 
   if (unlockHash1set)
   {
     bool match = true;
-    for (int i=0; i<32; i++) if (sha[i] != unlockHash1[i]) match = false;
+    for (int i=0; i<SHABUFLEN; i++) if (sha[i] != unlockHash1[i]) match = false;
     if (match) result = SERIAL_MODE_READONLY;
   }
 
   if (unlockHash2set)
   {
     bool match = true;
-    for (int i=0; i<32; i++) if (sha[i] != unlockHash2[i]) match = false;
+    for (int i=0; i<SHABUFLEN; i++) if (sha[i] != unlockHash2[i]) match = false;
     if (match) result = SERIAL_MODE_FULLACCESS;
   }
 
@@ -256,9 +257,9 @@ uint8_t checkUnlockHash(String s)
 }
 
 struct roamingTableEntry {
-  uint16_t da = 0x0000;
+  uint16_t da = RDCP_NO_ADDRESS;
   int16_t rssi = -200;
-  int64_t timestamp = 0;
+  int64_t timestamp = NO_TIMESTAMP;
 };
 
 struct roamingTableEntry roamingTable[16];
@@ -267,7 +268,7 @@ void updateRoamingTable(uint16_t da, int16_t rssi)
 {
   for (int i=0; i<16; i++)
   {
-    if ((roamingTable[i].da == da) || (roamingTable[i].da == 0x0000))
+    if ((roamingTable[i].da == da) || (roamingTable[i].da == RDCP_NO_ADDRESS))
     {
       roamingTable[i].da = da;
       roamingTable[i].rssi = rssi;
@@ -278,14 +279,14 @@ void updateRoamingTable(uint16_t da, int16_t rssi)
   return;
 }
 
-uint16_t getRoamingRecommendation(uint32_t timeframe = 1000*60*15)
+uint16_t getRoamingRecommendation(uint32_t timeframe = MINUTES_TO_MILLISECONDS*15)
 {
   int index = -1;
   int64_t now = my_millis();
 
   for (int i=0; i<16; i++)
   {
-    if ((roamingTable[i].timestamp + timeframe > now) && (roamingTable[i].da != 0x0000))
+    if ((roamingTable[i].timestamp + timeframe > now) && (roamingTable[i].da != RDCP_NO_ADDRESS))
     {
       if (index == -1)
       {

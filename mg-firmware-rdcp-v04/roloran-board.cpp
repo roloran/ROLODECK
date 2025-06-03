@@ -13,6 +13,7 @@
 #include "roloran-crypto.h"
 #include <SHA256.h>
 #include "roloran-audio.h"
+#include "settings-scenario.h"
 
 // Which file to persist message board entries in
 #define FILENAME_HISTORY "/history.dat"
@@ -25,19 +26,19 @@ struct history_entry {
     bool display = false;             //< relevant for displaying on-screen (e.g., false for signatures)
     bool forall = false;              //< relevant for everyone (true) or only this device (false)
     bool crisis = true;               //< crisis vs. non-crisis message (separate GUI textareas)
-    uint16_t origin = 0x0000;         //< RDCP Origin of the message or 0 for locally created messages
-    uint16_t seqnr = 0x0000;          //< RDCP Header SequenceNumber or number of multi-step local message
-    uint16_t refnr = 0x0000;          //< ReferenceNumber as used, e.g., in OA and CIRE subheaders
+    uint16_t origin = RDCP_LOCAL_ORIGIN;       //< RDCP Origin of the message or 0 for locally created messages
+    uint16_t seqnr = RDCP_NO_SEQUENCE_NUMBER;  //< RDCP Header SequenceNumber or number of multi-step local message
+    uint16_t refnr = RDCP_NO_REFERENCE_NUMBER; //< ReferenceNumber as used, e.g., in OA and CIRE subheaders
     uint8_t morefragments = 0;        //< Number of subsequently following/expected fragments of the same message
     char content_rdcp[384];           //< Base64-encoded RDCP message (LoRa packet payload) for received messages
     char content_text[1024];          //< Textual content of the message (decrypted and de-unishox2'd for received messages)
     uint8_t subtype = 0;              //< Subtype of the message, e.g., inquiry or crisis txt message
     bool signature_available = false; //< True if a signature for the message is available or message is locally generated
     char signature_verified = false;  //< True if the signature has been verified or message is locally generated
-    int64_t timestamp_added = 0;      //< my_millis() timestamp of when the message was added to the message board
-    time_t timestamp_added_abs = 0;   //< time_t of wallclock time of when message was added (if available)
-    int16_t lifetime = 0;             //< lifetime setting for message (can have magic values according to RDCP specs)
-    time_t expiry_absolute = 0;       //< Wallclock expiration timestamp (if available)
+    int64_t timestamp_added = NO_TIMESTAMP;     //< my_millis() timestamp of when the message was added to the message board
+    time_t timestamp_added_abs = NO_TIMESTAMP;  //< time_t of wallclock time of when message was added (if available)
+    int16_t lifetime = NO_DURATION;             //< lifetime setting for message (can have magic values according to RDCP specs)
+    time_t expiry_absolute = NO_TIMESTAMP;      //< Wallclock expiration timestamp (if available)
     char footer[8];                   // must be "RDCP"; used to detect history file corruption, e.g. due to power-off during writing
 };
 
@@ -66,8 +67,8 @@ void tdeck_set_time(int year, int month, int day, int hour, int minute)
     hqts.received = my_millis();
     has_external_time = true;
 
-    char info[128];
-    snprintf(info, 128, "INFO: T-Deck Wallclock Time set to %02d.%02d.%04d %02d:%02d @%lu", day, month, year, hour, minute, (unsigned long) hqts.received);
+    char info[INFOLEN];
+    snprintf(info, INFOLEN, "INFO: T-Deck Wallclock Time set to %02d.%02d.%04d %02d:%02d @%lu", day, month, year, hour, minute, (unsigned long) hqts.received);
     serial_writeln(info);
 
     return;
@@ -141,7 +142,7 @@ void mb_zap_counters(void)
     msg_noncrisis_current = 0;
     msg_noncrisis_last = 0;
     msg_noncrisis_total = 0;
-    highest_oa_refnr = 0;
+    highest_oa_refnr = RDCP_NO_REFERENCE_NUMBER;
     return;
 }
 
@@ -177,19 +178,19 @@ void mb_add_local_message(char *text, uint16_t refnr, uint16_t seqnr, uint16_t l
     time_t absexp = tdeck_get_time();
     cur_he.timestamp_added_abs = absexp;
 
-    if (absexp > 0)
+    if (absexp > NO_TIMESTAMP)
     {
         absexp += lifetime_to_seconds(lifetime);
         cur_he.expiry_absolute = absexp;
     }
     else
     {
-        cur_he.expiry_absolute = 0;
+        cur_he.expiry_absolute = NO_TIMESTAMP;
     }
     snprintf(cur_he.footer, 8, "RDCP\0");
 
-    char info[256];
-    snprintf(info, 256, "INFO: Written Message Board local history entry, timestamp: %lu", cur_he.timestamp_added_abs);
+    char info[INFOLEN];
+    snprintf(info, INFOLEN, "INFO: Written Message Board local history entry, timestamp: %lu", cur_he.timestamp_added_abs);
     serial_writeln(info);
 
     if (histfile) histfile.close();
@@ -225,7 +226,7 @@ void mb_check_for_signature(uint16_t origin, uint16_t refnr)
     int num_entries = histfile_numentries();
     if (num_entries == -1) return;
 
-    uint8_t schnorrsig[128];
+    uint8_t schnorrsig[SIGBUFLEN];
     int highest_fragment = 0;
     bool first_fragment = true;
 
@@ -235,7 +236,7 @@ void mb_check_for_signature(uint16_t origin, uint16_t refnr)
 
     SHA256 h = SHA256();
     h.reset();
-    uint8_t data_to_sign[256];
+    uint8_t data_to_sign[DATABUFLEN];
     uint8_t data_to_sign_length = 0;
 
     bool has_at_least_one_fragment = false;
@@ -257,7 +258,7 @@ void mb_check_for_signature(uint16_t origin, uint16_t refnr)
 
         if ((cur_he.origin == origin) && (cur_he.refnr == refnr))
         {
-            if ((cur_he.display == NOT_RELEVANT_FOR_DISPLAYING) && (cur_he.seqnr == 0) && (cur_he.local == GENERATED_EXTERNALLY))
+            if ((cur_he.display == NOT_RELEVANT_FOR_DISPLAYING) && (cur_he.seqnr == RDCP_NO_SEQUENCE_NUMBER) && (cur_he.local == GENERATED_EXTERNALLY))
             {
                 has_signature = true;
                 for (int i=0; i<65; i++) schnorrsig[i] = cur_he.content_text[i];
@@ -269,7 +270,7 @@ void mb_check_for_signature(uint16_t origin, uint16_t refnr)
                 fragsavail[cf] = true;
                 has_at_least_one_fragment = true;
 
-                uint8_t rm[256];
+                uint8_t rm[DATABUFLEN];
                 int b64msg_len = strlen(cur_he.content_rdcp);
                 int decoded_length = Base64ren.decodedLength(cur_he.content_rdcp, b64msg_len);
                 Base64ren.decode((char *)rm, cur_he.content_rdcp, b64msg_len);
@@ -302,7 +303,7 @@ void mb_check_for_signature(uint16_t origin, uint16_t refnr)
     } // read whole file
     histfile.close();
 
-    char info[128];
+    char info[INFOLEN];
 
     for (int i=0; i<highest_fragment; i++)
     {
@@ -311,15 +312,15 @@ void mb_check_for_signature(uint16_t origin, uint16_t refnr)
 
     bool signature_valid = false;
 
-    uint8_t sha[32];
+    uint8_t sha[SHABUFLEN];
     if (!has_at_least_one_fragment) has_all_fragments = false;
     if (has_signature && has_all_fragments)
     {
-      h.finalize(sha, 32);
-      signature_valid = schnorr_verify_signature(sha, 32, schnorrsig);
+      h.finalize(sha, SHABUFLEN);
+      signature_valid = schnorr_verify_signature(sha, SHABUFLEN, schnorrsig);
     }
 
-    snprintf(info, 128, "INFO: Signature check for %04X-%04X yields [%d highfrag, %s avail; sig%savail; sig%svalid]",
+    snprintf(info, INFOLEN, "INFO: Signature check for %04X-%04X yields [%d highfrag, %s avail; sig%savail; sig%svalid]",
         origin, refnr, highest_fragment, has_all_fragments?"all":"not all", has_signature?" ":" not ", signature_valid?" ":" not ");
     serial_writeln(info);
 
@@ -354,7 +355,7 @@ void mb_check_for_signature(uint16_t origin, uint16_t refnr)
             {
                 cur_he.signature_available = true;
                 cur_he.signature_verified = true;
-                snprintf(info, 128, "INFO: Rewriting Message Board history entry %d to reflect verified signature", i);
+                snprintf(info, INFOLEN, "INFO: Rewriting Message Board history entry %d to reflect verified signature", i);
                 serial_writeln(info);
             }
 
@@ -405,14 +406,14 @@ void mb_add_external_message(char *text, char *rdcpmsg, uint16_t origin, uint16_
     time_t absexp = tdeck_get_time();
     cur_he.timestamp_added_abs = absexp;
 
-    if (absexp > 0)
+    if (absexp > NO_TIMESTAMP)
     {
         absexp += lifetime_to_seconds(lifetime);
         cur_he.expiry_absolute = absexp;
     }
     else
     {
-        cur_he.expiry_absolute = 0;
+        cur_he.expiry_absolute = NO_TIMESTAMP;
     }
     snprintf(cur_he.footer, 8, "RDCP\0");
 
@@ -463,21 +464,20 @@ void mb_refresh_display(void)
     if (!hasStorage) return;
     bool last_msg_is_crisis = true;
 
-    char info[256];
+    char info[INFOLEN];
 
-    snprintf(info, 256, "WARNING: Obsolete mb_refresh_display() called");
+    snprintf(info, INFOLEN, "WARNING: Obsolete mb_refresh_display() called");
     serial_writeln(info);
 
     gui_crisis_clear();
     gui_noncrisis_clear();
 
     int num_entries = histfile_numentries();
-    Serial.println(num_entries); // DEBUG
     if (num_entries == -1) return;
     int skipfirst = 0;
     if (num_entries > MAX_SHOWN_ENTRIES) skipfirst = MAX_SHOWN_ENTRIES; // maximum number of entries to show
 
-    snprintf(info, 256, "INFO: Message Board History currently has %d entries", num_entries);
+    snprintf(info, INFOLEN, "INFO: Message Board History currently has %d entries", num_entries);
     serial_writeln(info);
 
     if (histfile)
@@ -523,17 +523,17 @@ void mb_refresh_display(void)
         if (i < skipfirst) continue; // only show the n latest messages for performance and memory reasons
         if (cur_he.display != RELEVANT_FOR_DISPLAYING) continue;
 
-        if (cur_he.timestamp_added_abs > 0)
+        if (cur_he.timestamp_added_abs > NO_TIMESTAMP)
         {
             struct tm ti;
             if (localtime_r(&cur_he.timestamp_added_abs, &ti))
             {
-                snprintf(info, 256, "\n[Empfangen %02d.%02d.%04d %02d:%02d]\n", ti.tm_mday, ti.tm_mon, ti.tm_year + 1900, ti.tm_hour, ti.tm_min);
+                snprintf(info, INFOLEN, "\n[Empfangen %02d.%02d.%04d %02d:%02d]\n", ti.tm_mday, ti.tm_mon, ti.tm_year + 1900, ti.tm_hour, ti.tm_min);
             }
         }
         else
         {
-            snprintf(info, 256, "\n");
+            snprintf(info, INFOLEN, "\n");
         }
         if (cur_he.crisis) { strcat((char *)buffer_crisis, info); } else { strcat((char *)buffer_noncrisis, info); }
 
@@ -557,17 +557,17 @@ void mb_refresh_display(void)
             if (cur_he.crisis)
             {
                 if (cur_he.subtype == RDCP_MSGTYPE_OA_SUBTYPE_CRISIS_TXT)
-                    snprintf(info, 256, "[Nachricht des Krisenstabs, Referenznummer %04X, %s digitale Unterschrift]\n", cur_he.refnr, cur_he.signature_verified ? "hat" : "noch ohne");
+                    snprintf(info, INFOLEN, "[Nachricht des Krisenstabs, Referenznummer %04X, %s digitale Unterschrift]\n", cur_he.refnr, cur_he.signature_verified ? "hat" : "noch ohne");
                 else if (cur_he.subtype == RDCP_MSGTYPE_OA_SUBTYPE_FEEDBACK)
-                    snprintf(info, 256, "[Antwort des Krisenstabs auf Ihre Nachricht %04X-%04X]\n", getMyRDCPAddress(), cur_he.refnr);
+                    snprintf(info, INFOLEN, "[Antwort des Krisenstabs auf Ihre Nachricht %04X-%04X]\n", getMyRDCPAddress(), cur_he.refnr);
                 else if (cur_he.subtype == RDCP_MSGTYPE_OA_SUBTYPE_INQUIRY)
-                    snprintf(info, 256, "[Frage des Krisenstabs zu Ihrer Nachricht %04X-%04X]\n", getMyRDCPAddress(), cur_he.refnr);
+                    snprintf(info, INFOLEN, "[Frage des Krisenstabs zu Ihrer Nachricht %04X-%04X]\n", getMyRDCPAddress(), cur_he.refnr);
                 else
-                    snprintf(info, 256, "[Nachricht %04X-%04X]\n", cur_he.origin, cur_he.refnr);
+                    snprintf(info, INFOLEN, "[Nachricht %04X-%04X]\n", cur_he.origin, cur_he.refnr);
                 strcat((char *)buffer_crisis, info);
                 if (cur_he.morefragments > 0)
                 {
-                    snprintf(info, 256, "[Mehrteilig. %d %s.]\n", cur_he.morefragments, cur_he.morefragments > 1 ? "Teile folgen" : "Teil folgt");
+                    snprintf(info, INFOLEN, "[Mehrteilig. %d %s.]\n", cur_he.morefragments, cur_he.morefragments > 1 ? "Teile folgen" : "Teil folgt");
                     strcat((char *)buffer_crisis, info);
                 }
 
@@ -577,11 +577,11 @@ void mb_refresh_display(void)
             }
             else
             {
-                snprintf(info, 256, "[Nachricht der Gemeinde, Referenznummer %04X, %s digitale Unterschrift]\n", cur_he.refnr, cur_he.signature_verified ? "hat" : "noch ohne");
+                snprintf(info, INFOLEN, "[Nachricht der Gemeinde, Referenznummer %04X, %s digitale Unterschrift]\n", cur_he.refnr, cur_he.signature_verified ? "hat" : "noch ohne");
                 strcat((char *)buffer_noncrisis, info);
                 if (cur_he.morefragments > 0)
                 {
-                    snprintf(info, 256, "[Mehrteilig. %d %s.]\n", cur_he.morefragments, cur_he.morefragments > 1 ? "Teile folgen" : "Teil folgt");
+                    snprintf(info, INFOLEN, "[Mehrteilig. %d %s.]\n", cur_he.morefragments, cur_he.morefragments > 1 ? "Teile folgen" : "Teil folgt");
                     strcat((char *)buffer_noncrisis, info);
                 }
 
@@ -608,7 +608,7 @@ void mb_refresh_display(void)
 
     size_t sc = strlen((const char*)buffer_crisis);
     size_t snc = strlen((const char*)buffer_noncrisis);
-    snprintf(info, 128, "INFO: Message Board updated with %d OAc, %d OAnc, last: %s", sc, snc, last_msg_is_crisis ? "crisis" : "noncrisis");
+    snprintf(info, INFOLEN, "INFO: Message Board updated with %d OAc, %d OAnc, last: %s", sc, snc, last_msg_is_crisis ? "crisis" : "noncrisis");
     serial_writeln(info);
 
     if (last_msg_is_crisis)
@@ -647,14 +647,14 @@ void mb_refresh_display(void)
 void mb_serial_show_messages(void)
 {
     if (!hasStorage) return;
-    char info[256];
+    char info[INFOLEN];
 
     int num_entries = histfile_numentries();
     if (num_entries == -1) return;
     int skipfirst = 0;
     if (num_entries > MAX_SHOWN_ENTRIES) skipfirst = MAX_SHOWN_ENTRIES; // maximum number of entries to show
 
-    snprintf(info, 256, "INFO: Message Board History currently has %d entries", num_entries);
+    snprintf(info, INFOLEN, "INFO: Message Board History currently has %d entries", num_entries);
     serial_writeln(info);
 
     if (histfile)
@@ -688,19 +688,19 @@ void mb_serial_show_messages(void)
             struct tm ti;
             if (localtime_r(&cur_he.timestamp_added_abs, &ti))
             {
-                snprintf(info, 256, "INFO: MBTIMESTAMP %d %02d.%02d.%04d %02d:%02d", i, ti.tm_mday, ti.tm_mon, ti.tm_year + 1900, ti.tm_hour, ti.tm_min);
+                snprintf(info, INFOLEN, "INFO: MBTIMESTAMP %d %02d.%02d.%04d %02d:%02d", i, ti.tm_mday, ti.tm_mon, ti.tm_year + 1900, ti.tm_hour, ti.tm_min);
                 serial_writeln(info);
             }
         }
 
         if (cur_he.local == GENERATED_LOCALLY)
         {
-            snprintf(info, 256, "INFO: MBENTRY %d (local) - %s", i, cur_he.content_text);
+            snprintf(info, INFOLEN, "INFO: MBENTRY %d (local) - %s", i, cur_he.content_text);
             serial_writeln(info);
         }
         else
         { // Handle externally received messages
-            snprintf(info, 256, "INFO: MBENTRY %d (remote) - R%04X - %s", i, cur_he.refnr, cur_he.content_text);
+            snprintf(info, INFOLEN, "INFO: MBENTRY %d (remote) - R%04X - %s", i, cur_he.refnr, cur_he.content_text);
             serial_writeln(info);
         }
     }
@@ -746,8 +746,8 @@ void mb_rewrite_history_obs(int changeidx, bool deletion)
     LittleFS.remove(FILENAME_HISTORY);
     LittleFS.rename(FILENAME_HISTTMP, FILENAME_HISTORY);
 
-    char info[128];
-    snprintf(info, 128, "INFO: MB History re-written, %d entries, %s entry %d", i, deletion ? "deleted" : "changed", changeidx);
+    char info[INFOLEN];
+    snprintf(info, INFOLEN, "INFO: MB History re-written, %d entries, %s entry %d", i, deletion ? "deleted" : "changed", changeidx);
     serial_writeln(info);
 
     return;
@@ -762,7 +762,7 @@ void mb_add_signature(uint8_t *signature, uint16_t origin, uint16_t refnr)
     cur_he.forall = RELEVANCE_FOR_EVERYONE;
     cur_he.crisis = false;
     cur_he.origin = origin;
-    cur_he.seqnr = 0;
+    cur_he.seqnr = RDCP_NO_SEQUENCE_NUMBER;
     cur_he.refnr = refnr;
     cur_he.morefragments = 0;
     for (int i=0; i<65; i++) cur_he.content_text[i] = signature[i];
@@ -771,11 +771,11 @@ void mb_add_signature(uint8_t *signature, uint16_t origin, uint16_t refnr)
     cur_he.signature_available = true;
     cur_he.signature_verified = false;
     cur_he.timestamp_added = my_millis();
-    cur_he.lifetime = 0;
+    cur_he.lifetime = NO_TIMESTAMP;
     cur_he.subtype = 0;
     time_t absexp = tdeck_get_time();
     cur_he.timestamp_added_abs = absexp;
-    cur_he.expiry_absolute = 0;
+    cur_he.expiry_absolute = NO_TIMESTAMP;
     snprintf(cur_he.footer, 8, "RDCP\0");
 
     if (histfile)
@@ -853,26 +853,26 @@ bool mb_check_lifetime(void)
     
         bool has_expired = false;
 
-        if (he.lifetime == 0)
+        if (he.lifetime == NO_DURATION)
         {
             nf.write((uint8_t*)&he, sizeof(history_entry));
             continue; // 0 is magic value for infinite lifetime
         }
 
-        if (now_abs > 0)
+        if (now_abs > NO_TIMESTAMP)
         { // Device currently has wallclock time available
             if ((he.expiry_absolute > 0) && (now_abs > he.expiry_absolute)) has_expired = true;
         }
 
-        if ((now_abs == 0) || (he.expiry_absolute == 0))
+        if ((now_abs == NO_TIMESTAMP) || (he.expiry_absolute == NO_TIMESTAMP))
         {   // We need to work with a monotonic clock only
             // If the entry was added "in the future", assume that the device had a power cycle
             // and treat the entry as if it was added at power-on.
             int64_t basetime = he.timestamp_added;
-            if (basetime > now) basetime = 0;
+            if (basetime > now) basetime = NO_TIMESTAMP;
 
             // Device timestamps are in milliseconds, so convert lifetime to milliseconds
-            if (now > (basetime + 1000 * lifetime_to_seconds(he.lifetime))) has_expired = true;
+            if (now > (basetime + SECONDS_TO_MILLISECONDS * lifetime_to_seconds(he.lifetime))) has_expired = true;
         }
 
         if (!has_expired)
@@ -883,8 +883,8 @@ bool mb_check_lifetime(void)
         else
         {
             deleted_something = true;
-            char info[128];
-            snprintf(info, 128, "INFO: Dropped MB entry o%04X r%04X - expired", he.origin, he.refnr);
+            char info[INFOLEN];
+            snprintf(info, INFOLEN, "INFO: Dropped MB entry o%04X r%04X - expired", he.origin, he.refnr);
             serial_writeln(info);
         }
         i++;
@@ -954,7 +954,7 @@ void mb_update_lifetime(uint16_t origin, uint16_t refnr, uint16_t lifetime)
 
         if ((origin == he.origin) && (refnr == he.refnr))
         { // found an entry that needs to be updated
-            if (lifetime == 0)
+            if (lifetime == NO_DURATION)
             { // delete this entry because new lifetime is 0
                 deleted_something = true;
                 delete_this = true;
@@ -962,14 +962,14 @@ void mb_update_lifetime(uint16_t origin, uint16_t refnr, uint16_t lifetime)
 
             time_t absexp = tdeck_get_time();
             he.timestamp_added_abs = absexp;
-            if (absexp > 0)
+            if (absexp > NO_TIMESTAMP)
             {
                 absexp += lifetime_to_seconds(lifetime);
                 he.expiry_absolute = absexp;
             }
             else
             {
-               he.expiry_absolute = 0;
+               he.expiry_absolute = NO_TIMESTAMP;
             }
             he.lifetime = lifetime;
             he.timestamp_added = my_millis();
@@ -981,8 +981,8 @@ void mb_update_lifetime(uint16_t origin, uint16_t refnr, uint16_t lifetime)
             }
             else 
             {
-                char info[128];
-                snprintf(info, 128, "INFO: Dropped MB entry o%04X r%04X - lifetime set to zero", he.origin, he.refnr);
+                char info[INFOLEN];
+                snprintf(info, INFOLEN, "INFO: Dropped MB entry o%04X r%04X - lifetime set to zero", he.origin, he.refnr);
                 serial_writeln(info);
             }
         }
@@ -1075,7 +1075,7 @@ void mb_count(void)
             return;
         }
         if ((cur_he.display == NOT_RELEVANT_FOR_DISPLAYING) &&
-            (cur_he.seqnr == 0) && (cur_he.local == GENERATED_EXTERNALLY))
+            (cur_he.seqnr == RDCP_NO_SEQUENCE_NUMBER) && (cur_he.local == GENERATED_EXTERNALLY))
             { // cryptographic signature
                 msg_ignored += 1;
                 continue;
@@ -1090,8 +1090,8 @@ void mb_count(void)
     }
     histfile.close();
 
-    char info[256];
-    snprintf(info, 256, "INFO: MB count yields %d crisis, %d non-crisis, %d ignored, last: %s",
+    char info[INFOLEN];
+    snprintf(info, INFOLEN, "INFO: MB count yields %d crisis, %d non-crisis, %d ignored, last: %s",
         msg_crisis_total, msg_noncrisis_total, msg_ignored, msg_crisis_last > msg_noncrisis_last ? "crisis" : "non-crisis");
     serial_writeln(info);
 
@@ -1121,7 +1121,7 @@ void mb_show_by_number(int msgno, bool crisis)
             return;
         }
         if ((cur_he.display == NOT_RELEVANT_FOR_DISPLAYING) &&
-            (cur_he.seqnr == 0) && (cur_he.local == GENERATED_EXTERNALLY)) continue;
+            (cur_he.seqnr == RDCP_NO_SEQUENCE_NUMBER) && (cur_he.local == GENERATED_EXTERNALLY)) continue;
         if (cur_he.crisis == crisis)
         {
             counter++;
@@ -1139,7 +1139,7 @@ char textblob[8192];
 
 void mb_show_current(int as_number)
 {
-    char textfield[32], info[256];
+    char textfield[MINIBUFLEN], info[INFOLEN];
     if (cur_he.crisis)
     {
         if (gui_get_current_screen() != SCREEN_OACRISIS)
@@ -1167,7 +1167,7 @@ void mb_show_current(int as_number)
 
         if (msg_crisis_total <= 1)
         {
-            snprintf(textfield, 32, "0 von 0");
+            snprintf(textfield, MINIBUFLEN, "0 von 0");
             lv_obj_set_style_bg_color(ui_ButtonOACNav1, lv_color_hex(0x444444), LV_PART_MAIN | LV_STATE_DEFAULT);
             lv_obj_set_style_bg_color(ui_ButtonOACNav2, lv_color_hex(0x444444), LV_PART_MAIN | LV_STATE_DEFAULT);
             lv_obj_set_style_bg_color(ui_ButtonOACNav3, lv_color_hex(0x444444), LV_PART_MAIN | LV_STATE_DEFAULT);
@@ -1191,13 +1191,13 @@ void mb_show_current(int as_number)
 
         if ((as_number >= 1) && (as_number < msg_crisis_total))
         {
-            snprintf(textfield, 32, "%d von %d", as_number, msg_crisis_total);
+            snprintf(textfield, MINIBUFLEN, "%d von %d", as_number, msg_crisis_total);
         }
 
         if ((as_number == -1) || (as_number == msg_crisis_total))
         { // Disable forward buttons
             msg_crisis_current = msg_crisis_total;
-            snprintf(textfield, 32, "%d von %d", msg_crisis_total, msg_crisis_total);
+            snprintf(textfield, MINIBUFLEN, "%d von %d", msg_crisis_total, msg_crisis_total);
             lv_obj_set_style_bg_color(ui_ButtonOACNav3, lv_color_hex(0x444444), LV_PART_MAIN | LV_STATE_DEFAULT);
             lv_obj_set_style_bg_color(ui_ButtonOACNav4, lv_color_hex(0x444444), LV_PART_MAIN | LV_STATE_DEFAULT);
             lv_obj_add_state(ui_ButtonOACNav3, LV_STATE_DISABLED);
@@ -1206,7 +1206,7 @@ void mb_show_current(int as_number)
 
         lv_label_set_text(ui_OACTextNum, textfield);
 
-        char textpart[256];
+        char textpart[INFOLEN];
         if (cur_he.timestamp_added_abs > 0)
         {
             struct tm ti;
@@ -1214,17 +1214,17 @@ void mb_show_current(int as_number)
             {
                 if (cur_he.local == GENERATED_EXTERNALLY)
                 {
-                    snprintf(textpart, 256, "Empfangen %02d.%02d.%04d %02d:%02d\n", ti.tm_mday, ti.tm_mon, ti.tm_year + 1900, ti.tm_hour, ti.tm_min);
+                    snprintf(textpart, INFOLEN, "Empfangen %02d.%02d.%04d %02d:%02d\n", ti.tm_mday, ti.tm_mon, ti.tm_year + 1900, ti.tm_hour, ti.tm_min);
                 }
                 else
                 {
-                    snprintf(textpart, 256, "%02d.%02d.%04d %02d:%02d\n", ti.tm_mday, ti.tm_mon, ti.tm_year + 1900, ti.tm_hour, ti.tm_min);
+                    snprintf(textpart, INFOLEN, "%02d.%02d.%04d %02d:%02d\n", ti.tm_mday, ti.tm_mon, ti.tm_year + 1900, ti.tm_hour, ti.tm_min);
                 }
             }
         }
         else
         {
-            snprintf(textpart, 256, "");
+            snprintf(textpart, INFOLEN, "");
         }
 
         if (cur_he.local == GENERATED_EXTERNALLY)
@@ -1246,7 +1246,7 @@ void mb_show_current(int as_number)
             strcat(textblob, cur_he.content_text);
             if (cur_he.morefragments)
             {
-                snprintf(info, 256, "\n[Mehrteilig: %d %s]", cur_he.morefragments, cur_he.morefragments > 1 ? "Teile folgen" : "Teil folgt");
+                snprintf(info, INFOLEN, "\n[Mehrteilig: %d %s]", cur_he.morefragments, cur_he.morefragments > 1 ? "Teile folgen" : "Teil folgt");
                 strcat(textblob, info);
             }
         }
@@ -1281,7 +1281,7 @@ void mb_show_current(int as_number)
 
         if (msg_noncrisis_total <= 1)
         {
-            snprintf(textfield, 32, "0 von 0");
+            snprintf(textfield, MINIBUFLEN, "0 von 0");
             lv_obj_set_style_bg_color(ui_ButtonOANCNav1, lv_color_hex(0x444444), LV_PART_MAIN | LV_STATE_DEFAULT);
             lv_obj_set_style_bg_color(ui_ButtonOANCNav2, lv_color_hex(0x444444), LV_PART_MAIN | LV_STATE_DEFAULT);
             lv_obj_set_style_bg_color(ui_ButtonOANCNav3, lv_color_hex(0x444444), LV_PART_MAIN | LV_STATE_DEFAULT);
@@ -1305,13 +1305,13 @@ void mb_show_current(int as_number)
 
         if ((as_number >= 1) && (as_number < msg_noncrisis_total))
         {
-            snprintf(textfield, 32, "%d von %d", as_number, msg_noncrisis_total);
+            snprintf(textfield, MINIBUFLEN, "%d von %d", as_number, msg_noncrisis_total);
         }
 
         if ((as_number == -1) || (as_number == msg_noncrisis_total))
         { // Disable forward buttons
             msg_noncrisis_current = msg_noncrisis_total;
-            snprintf(textfield, 32, "%d von %d", msg_noncrisis_total, msg_noncrisis_total);
+            snprintf(textfield, MINIBUFLEN, "%d von %d", msg_noncrisis_total, msg_noncrisis_total);
             lv_obj_set_style_bg_color(ui_ButtonOANCNav3, lv_color_hex(0x444444), LV_PART_MAIN | LV_STATE_DEFAULT);
             lv_obj_set_style_bg_color(ui_ButtonOANCNav4, lv_color_hex(0x444444), LV_PART_MAIN | LV_STATE_DEFAULT);
             lv_obj_add_state(ui_ButtonOANCNav3, LV_STATE_DISABLED);
@@ -1328,17 +1328,17 @@ void mb_show_current(int as_number)
             {
                 if (cur_he.local == GENERATED_EXTERNALLY)
                 {
-                    snprintf(textpart, 256, "Empfangen %02d.%02d.%04d %02d:%02d\n", ti.tm_mday, ti.tm_mon, ti.tm_year + 1900, ti.tm_hour, ti.tm_min);
+                    snprintf(textpart, INFOLEN, "Empfangen %02d.%02d.%04d %02d:%02d\n", ti.tm_mday, ti.tm_mon, ti.tm_year + 1900, ti.tm_hour, ti.tm_min);
                 }
                 else
                 {
-                    snprintf(textpart, 256, "%02d.%02d.%04d %02d:%02d\n", ti.tm_mday, ti.tm_mon, ti.tm_year + 1900, ti.tm_hour, ti.tm_min);
+                    snprintf(textpart, INFOLEN, "%02d.%02d.%04d %02d:%02d\n", ti.tm_mday, ti.tm_mon, ti.tm_year + 1900, ti.tm_hour, ti.tm_min);
                 }
             }
         }
         else
         {
-            snprintf(textpart, 256, "");
+            snprintf(textpart, INFOLEN, "");
         }
 
         if (cur_he.local == GENERATED_EXTERNALLY)
@@ -1350,7 +1350,7 @@ void mb_show_current(int as_number)
             strcat(textblob, cur_he.content_text);
             if (cur_he.morefragments)
             {
-                snprintf(info, 256, "\n[Mehrteilig: %d %s]", cur_he.morefragments, cur_he.morefragments > 1 ? "Teile folgen" : "Teil folgt");
+                snprintf(info, INFOLEN, "\n[Mehrteilig: %d %s]", cur_he.morefragments, cur_he.morefragments > 1 ? "Teile folgen" : "Teil folgt");
                 strcat(textblob, info);
             }
         }
