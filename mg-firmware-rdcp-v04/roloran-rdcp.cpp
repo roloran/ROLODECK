@@ -30,27 +30,27 @@ struct txqueue txq;       // One global TX Queue
 struct txaheadqueue txaq; // One global TX Ahead Queue
 
 int tx_ongoing = -1;      // Index of TXQ entry currently up for transmission
-int64_t tx_process_start = 0;
+int64_t tx_process_start = NO_TIMESTAMP;
 int retransmission_count = 0;
-int64_t last_tx_activity = 0;
+int64_t last_tx_activity = NO_TIMESTAMP;
 
 int32_t bad_crc_counter = 0;
-uint16_t most_recent_airtime = 0;
+uint16_t most_recent_airtime = NO_DURATION;
 uint8_t most_recent_future_timeslots = 0;
 
 uint8_t cire_retry = 0;     // How often did we already try to send a CIRE?
-int64_t cire_starttime = 0; // When was the CIRE sent?
+int64_t cire_starttime = NO_TIMESTAMP; // When was the CIRE sent?
 #define CIRE_STATE_NONE    0
 #define CIRE_STATE_WAIT_DA 1
 #define CIRE_STATE_WAIT_HQ 2
 uint8_t  cire_state = CIRE_STATE_NONE;
 uint16_t cire_seqnrs[]= {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0};
-uint16_t cire_current_seqnr = 0x0000;
+uint16_t cire_current_seqnr = RDCP_NO_SEQUENCE_NUMBER;
 uint8_t  cire_current_subtype = 0x00;
-uint16_t cire_current_refnr = 0x0000;
-char     cire_current_text[256];
+uint16_t cire_current_refnr = RDCP_NO_REFERENCE_NUMBER;
+char     cire_current_text[INFOLEN];
 uint16_t cire_guitext_num = 1;
-uint16_t cire_current_ep = 0x0000;
+uint16_t cire_current_ep = RDCP_NO_ADDRESS;
 
 int64_t rdcp_get_channel_free_estimation(void)
 {
@@ -132,17 +132,17 @@ uint16_t crc16(uint8_t *data, uint16_t len)
 
 bool rdcp_check_crc_in(uint8_t real_packet_length)
 {
-  uint8_t data_for_crc[256];
+  uint8_t data_for_crc[DATABUFLEN];
 
   /* Copy RDCP header and payload into data structure for CRC calculation */
-  memcpy(&data_for_crc, &rdcp_msg_in.header, RDCP_HEADER_SIZE - 2);
+  memcpy(&data_for_crc, &rdcp_msg_in.header, RDCP_HEADER_SIZE - CRC_SIZE);
   for (int i=0; i < real_packet_length - RDCP_HEADER_SIZE; i++)
   {
-    data_for_crc[i + RDCP_HEADER_SIZE - 2] = rdcp_msg_in.payload.data[i];
+    data_for_crc[i + RDCP_HEADER_SIZE - CRC_SIZE] = rdcp_msg_in.payload.data[i];
   }
 
   /* Calculate and check CRC */
-  uint16_t actual_crc = crc16(data_for_crc, real_packet_length - 2);
+  uint16_t actual_crc = crc16(data_for_crc, real_packet_length - CRC_SIZE);
 
   if (actual_crc == rdcp_msg_in.header.checksum)
   {
@@ -152,14 +152,14 @@ bool rdcp_check_crc_in(uint8_t real_packet_length)
   return false;
 }
 
-int64_t last_csv_timestamp = 0;
+int64_t last_csv_timestamp = NO_TIMESTAMP;
 
 void print_rdcp_csv(void)
 {
   int64_t now = my_millis();
-  char info[512];
+  char info[FATLEN];
 
-  uint16_t refnr = 0x0000;
+  uint16_t refnr = RDCP_NO_REFERENCE_NUMBER;
   if (rdcp_msg_in.header.message_type == RDCP_MSGTYPE_OFFICIAL_ANNOUNCEMENT)
   {
     refnr = rdcp_msg_in.payload.data[1] + 256 * rdcp_msg_in.payload.data[2];
@@ -169,13 +169,13 @@ void print_rdcp_csv(void)
     refnr = rdcp_msg_in.payload.data[0] + 256 * rdcp_msg_in.payload.data[1];
   }
 
-  snprintf(info, 512, "RDCPCSV: %04X,%" PRId64 ",%" PRId64 ",%" PRId64 ",%" PRId64 ",%d,%04X,%d,%04X,%04X,%04X,%04X,%02X,%d,%02X,%02X,%02X,%04X,%d,%3.3f", 
+  snprintf(info, FATLEN, "RDCPCSV: %04X,%" PRId64 ",%" PRId64 ",%" PRId64 ",%" PRId64 ",%d,%04X,%d,%04X,%04X,%04X,%04X,%02X,%d,%02X,%02X,%02X,%04X,%d,%3.3f", 
     getMyRDCPAddress(),
     now - last_csv_timestamp,
     now, 
     CFEst,
     CFEst - now,
-    rdcp_msg_in.header.rdcp_payload_length + 16,
+    rdcp_msg_in.header.rdcp_payload_length + RDCP_HEADER_SIZE,
     refnr,
     most_recent_future_timeslots,
     rdcp_msg_in.header.sender,
@@ -246,9 +246,9 @@ void rdcp_repeater(void)
   rm.header.counter = 0; /* one-shot only */
   if (getMyLoRaFrequency() < 500)
   { // don't re-start interrupted propagation cycles on the 433 MHz band
-    rm.header.relay1 = 0xEE; 
-    rm.header.relay2 = 0xEE; 
-    rm.header.relay3 = 0xEE; 
+    rm.header.relay1 = RDCP_HEADER_RELAY_MAGIC_NONE; 
+    rm.header.relay2 = RDCP_HEADER_RELAY_MAGIC_NONE; 
+    rm.header.relay3 = RDCP_HEADER_RELAY_MAGIC_NONE; 
   }
   else 
   {
@@ -260,28 +260,28 @@ void rdcp_repeater(void)
     rm.payload.data[i] = rdcp_msg_in.payload.data[i];
 
   /* Set the CRC header field */
-  uint8_t data_for_crc[256];
-  memcpy(&data_for_crc, &rm.header, RDCP_HEADER_SIZE - 2);
+  uint8_t data_for_crc[DATABUFLEN];
+  memcpy(&data_for_crc, &rm.header, RDCP_HEADER_SIZE - CRC_SIZE);
   for (int i=0; i < rm.header.rdcp_payload_length; i++)
   {
-    data_for_crc[i + RDCP_HEADER_SIZE - 2] = rm.payload.data[i];
+    data_for_crc[i + RDCP_HEADER_SIZE - CRC_SIZE] = rm.payload.data[i];
   }
-  uint16_t actual_crc = crc16(data_for_crc, RDCP_HEADER_SIZE - 2 + rm.header.rdcp_payload_length);
+  uint16_t actual_crc = crc16(data_for_crc, RDCP_HEADER_SIZE - CRC_SIZE + rm.header.rdcp_payload_length);
   rm.header.checksum = actual_crc;
 
   /* Schedule the outgoing message for sending */
-  uint8_t data[256];
+  uint8_t data[DATABUFLEN];
   memcpy(&data, &rm.header, RDCP_HEADER_SIZE);
   for (int i=0; i<rm.header.rdcp_payload_length; i++) 
     data[i + RDCP_HEADER_SIZE] = rm.payload.data[i];
   rdcp_txqueue_add(data, RDCP_HEADER_SIZE + rm.header.rdcp_payload_length, 
-                   NOTIMPORTANT, NOTFORCEDTX, TX_CALLBACK_NONE, 0);
+                   NOTIMPORTANT, NOTFORCEDTX, TX_CALLBACK_NONE, TX_WHEN_CF);
 
   return;
 }
 
-uint16_t most_recent_origin = 0x0000;
-uint16_t most_recent_seqnr  = 0x0000;
+uint16_t most_recent_origin = RDCP_NO_ADDRESS;
+uint16_t most_recent_seqnr  = RDCP_NO_SEQUENCE_NUMBER;
 
 bool rdcp_mg_process_rxed_lora_packet(uint8_t *lora_packet, uint16_t lora_packet_length, int64_t lora_packet_timestamp)
 {
@@ -325,7 +325,7 @@ bool rdcp_mg_process_rxed_lora_packet(uint8_t *lora_packet, uint16_t lora_packet
 
   /* Use getReceiveRSSI if Sender is a DA to update the roaming table. */
   int16_t rssi = getReceiveRSSI();
-  if ((rdcp_msg_in.header.sender >= 0x0200) && (rdcp_msg_in.header.sender < 0x0300))
+  if ((rdcp_msg_in.header.sender >= RDCP_ADDRESS_DA_LOWERBOUND) && (rdcp_msg_in.header.sender < RDCP_ADDRESS_MG_LOWERBOUND))
   {
     updateRoamingTable(rdcp_msg_in.header.sender, rssi);
   }
@@ -339,8 +339,8 @@ bool rdcp_mg_process_rxed_lora_packet(uint8_t *lora_packet, uint16_t lora_packet
     is_duplicate = true;
     if (rdcp_ignore_duplicates == false)
     {
-      char buf[256];
-      snprintf(buf, 256, "INFO: RDCP message (origin %04X, seqnr %04X) is duplicate - not processing", rdcp_msg_in.header.origin, rdcp_msg_in.header.sequence_number);
+      char buf[INFOLEN];
+      snprintf(buf, INFOLEN, "INFO: RDCP message (origin %04X, seqnr %04X) is duplicate - not processing", rdcp_msg_in.header.origin, rdcp_msg_in.header.sequence_number);
       serial_writeln(buf);
       /*
        * NB: If we are a designated Relay for this RDCP Message, we have to relay it without processing its content again.
@@ -372,7 +372,7 @@ bool rdcp_mg_process_rxed_lora_packet(uint8_t *lora_packet, uint16_t lora_packet
     free for the EP DA's ACK reply. 
   */
   if ((rdcp_msg_in.header.message_type == RDCP_MSGTYPE_CITIZEN_REPORT) &&
-      (rdcp_msg_in.header.sender >= 0x0300)) rdcp_update_channel_free_estimation(CFEst + 60000);
+      (rdcp_msg_in.header.sender >= RDCP_ADDRESS_MG_LOWERBOUND)) rdcp_update_channel_free_estimation(CFEst + 1 * MINUTES_TO_MILLISECONDS);
 
   /* Repeat the RDCP Message if the device is configured accordingly. */
   if (!is_duplicate) rdcp_repeater();
@@ -387,9 +387,9 @@ void rdcp_reset_duplicate_message_table()
   dupe_table.num_entries = 0;
   for (int i=0; i != 256; i++)
   {
-    dupe_table.tableentry[i].origin = 0;
-    dupe_table.tableentry[i].sequence_number = 0;
-    dupe_table.tableentry[i].last_seen = 0;
+    dupe_table.tableentry[i].origin = RDCP_NO_ADDRESS;
+    dupe_table.tableentry[i].sequence_number = RDCP_NO_SEQUENCE_NUMBER;
+    dupe_table.tableentry[i].last_seen = NO_TIMESTAMP;
   }
   return;
 }
@@ -466,18 +466,18 @@ void rdcp_update_channel_free_estimator_rx(void)
 
   uint32_t remaining_current_sender_time = airtime_with_buffer * rdcp_msg_in.header.counter;
 
-  uint8_t nrt = 0;
+  uint8_t nrt = NRT_LOW;
   uint8_t mt = rdcp_msg_in.header.message_type;
   if ( (mt == RDCP_MSGTYPE_INFRASTRUCTURE_RESET) || (mt == RDCP_MSGTYPE_ACK) ||
-       (mt == RDCP_MSGTYPE_RESET_ALL_ANNOUNCEMENTS) ) nrt = 2;
+       (mt == RDCP_MSGTYPE_RESET_ALL_ANNOUNCEMENTS) ) nrt = NRT_MIDDLE;
   if ( (mt == RDCP_MSGTYPE_OFFICIAL_ANNOUNCEMENT) || (mt == RDCP_MSGTYPE_CITIZEN_REPORT) ||
-       (mt == RDCP_MSGTYPE_SIGNATURE) ) nrt = 4;
+       (mt == RDCP_MSGTYPE_SIGNATURE) ) nrt = NRT_HIGH;
 
   uint32_t timeslot_duration = (nrt+1) * airtime_with_buffer;
 
   uint8_t future_timeslots = 0;
 
-  if ((rdcp_msg_in.header.sender < 0x0300) && (rdcp_msg_in.header.sender >= 0x0100))
+  if ((rdcp_msg_in.header.sender < RDCP_ADDRESS_MG_LOWERBOUND) && (rdcp_msg_in.header.sender >= RDCP_ADDRESS_BBKDA_LOWERBOUND))
   { // DA or BBK sending
     /* Previously used values for a 14 timeslots propagation cycle: */
     /*
@@ -519,8 +519,8 @@ void rdcp_update_channel_free_estimator_rx(void)
 
   rdcp_update_channel_free_estimation(channel_free_at);
 
-  char buf[256];
-  snprintf(buf, 256, "INFO: Channel free estimation: +%zu ms, @%llu ms (airtime %u ms, retrans %zu ms, timeslot %zu ms, %d fut ts)", channel_free_after, channel_free_at, airtime, remaining_current_sender_time, timeslot_duration, future_timeslots);
+  char buf[INFOLEN];
+  snprintf(buf, INFOLEN, "INFO: Channel free estimation: +%zu ms, @%llu ms (airtime %u ms, retrans %zu ms, timeslot %zu ms, %d fut ts)", channel_free_after, channel_free_at, airtime, remaining_current_sender_time, timeslot_duration, future_timeslots);
   serial_writeln(buf);
 
   return;
@@ -528,12 +528,12 @@ void rdcp_update_channel_free_estimator_rx(void)
 
 void rdcp_mg_print_test_message(void)
 {
-  char content[256];
-  char buf [512];
+  char content[INFOLEN];
+  char buf [FATLEN];
   int i=0;
   for (i=0; i < rdcp_msg_in.header.rdcp_payload_length; i++) content[i] = rdcp_msg_in.payload.data[i];
   content[i] = '\0';
-  snprintf(buf, 512, "INFO: RDCP Test Message from %04X to %04X -> %s", rdcp_msg_in.header.origin, rdcp_msg_in.header.destination, content);
+  snprintf(buf, FATLEN, "INFO: RDCP Test Message from %04X to %04X -> %s", rdcp_msg_in.header.origin, rdcp_msg_in.header.destination, content);
   serial_writeln(buf);
   return;
 }
@@ -546,26 +546,26 @@ void rdcp_mg_fill_outgoing_header(struct rdcp_message *rm)
   rm->header.sender = me;
 
   uint8_t mt = rm->header.message_type;
-  rm->header.counter = 0;
+  rm->header.counter = NRT_LOW;
   if ( (mt == RDCP_MSGTYPE_INFRASTRUCTURE_RESET) || (mt == RDCP_MSGTYPE_ACK) ||
-       (mt == RDCP_MSGTYPE_RESET_ALL_ANNOUNCEMENTS) ) rm->header.counter = 2;
+       (mt == RDCP_MSGTYPE_RESET_ALL_ANNOUNCEMENTS) ) rm->header.counter = NRT_MIDDLE;
   if ( (mt == RDCP_MSGTYPE_OFFICIAL_ANNOUNCEMENT) || (mt == RDCP_MSGTYPE_CITIZEN_REPORT) ||
-       (mt == RDCP_MSGTYPE_SIGNATURE) ) rm->header.counter = 4;
+       (mt == RDCP_MSGTYPE_SIGNATURE) ) rm->header.counter = NRT_HIGH;
 
   rm->header.sequence_number = get_next_rdcp_sequence_number(me);
 
-  uint16_t primary_ep = getSuggestedRelay(0); //getEntryPoint(0);
+  uint16_t primary_ep = getSuggestedRelay(0);
   rm->header.relay1 = (uint8_t) ((primary_ep & 0x000F) * 8) + (uint8_t) 0x0;
-  rm->header.relay2 = 0xEE;
-  rm->header.relay3 = 0xEE;
+  rm->header.relay2 = RDCP_HEADER_RELAY_MAGIC_NONE;
+  rm->header.relay3 = RDCP_HEADER_RELAY_MAGIC_NONE;
 
-  uint8_t data_for_crc[256];
-  memcpy(&data_for_crc, &rm->header, RDCP_HEADER_SIZE - 2);
+  uint8_t data_for_crc[DATABUFLEN];
+  memcpy(&data_for_crc, &rm->header, RDCP_HEADER_SIZE - CRC_SIZE);
   for (int i=0; i < rm->header.rdcp_payload_length; i++)
   {
-    data_for_crc[i + RDCP_HEADER_SIZE - 2] = rm->payload.data[i];
+    data_for_crc[i + RDCP_HEADER_SIZE - CRC_SIZE] = rm->payload.data[i];
   }
-  uint16_t actual_crc = crc16(data_for_crc, RDCP_HEADER_SIZE - 2 + rm->header.rdcp_payload_length);
+  uint16_t actual_crc = crc16(data_for_crc, RDCP_HEADER_SIZE - CRC_SIZE + rm->header.rdcp_payload_length);
   rm->header.checksum = actual_crc;
 
   return;
@@ -574,10 +574,10 @@ void rdcp_mg_fill_outgoing_header(struct rdcp_message *rm)
 void rdcp_mg_send_echo_response(uint16_t desta)
 {
   struct rdcp_message rm;
-  uint8_t data[256];
+  uint8_t data[DATABUFLEN];
 
-  char info[256];
-  snprintf(info, 256, "INFO: Responding to RDCP Echo Request by %04X with RDCP Echo Response", desta);
+  char info[INFOLEN];
+  snprintf(info, INFOLEN, "INFO: Responding to RDCP Echo Request by %04X with RDCP Echo Response", desta);
   serial_writeln(info);
 
   rm.header.destination  = desta;
@@ -587,17 +587,17 @@ void rdcp_mg_send_echo_response(uint16_t desta)
   rdcp_mg_fill_outgoing_header(&rm);
 
   memcpy(&data, &rm.header, RDCP_HEADER_SIZE);
-  rdcp_txqueue_add(data, RDCP_HEADER_SIZE, NOTIMPORTANT, NOTFORCEDTX, TX_CALLBACK_NONE, 0);
+  rdcp_txqueue_add(data, RDCP_HEADER_SIZE, NOTIMPORTANT, NOTFORCEDTX, TX_CALLBACK_NONE, TX_WHEN_CF);
   return;
 }
 
 void rdcp_mg_send_echo_request(uint16_t desta)
 {
   struct rdcp_message rm;
-  uint8_t data[256];
+  uint8_t data[DATABUFLEN];
 
-  char info[256];
-  snprintf(info, 256, "INFO: Sending RDCP Echo Request to %04X", desta);
+  char info[INFOLEN];
+  snprintf(info, INFOLEN, "INFO: Sending RDCP Echo Request to %04X", desta);
   serial_writeln(info);
 
   rm.header.destination  = desta;
@@ -607,32 +607,32 @@ void rdcp_mg_send_echo_request(uint16_t desta)
   rdcp_mg_fill_outgoing_header(&rm);
 
   memcpy(&data, &rm.header, RDCP_HEADER_SIZE);
-  rdcp_txqueue_add(data, RDCP_HEADER_SIZE, NOTIMPORTANT, NOTFORCEDTX, TX_CALLBACK_NONE, 0);
+  rdcp_txqueue_add(data, RDCP_HEADER_SIZE, NOTIMPORTANT, NOTFORCEDTX, TX_CALLBACK_NONE, TX_WHEN_CF);
   return;
 }
 
 void rdcp_mg_send_test_message(uint16_t desta, String m)
 {
   struct rdcp_message rm;
-  uint8_t data[256];
+  uint8_t data[DATABUFLEN];
 
-  char info[256];
-  snprintf(info, 256, "INFO: Sending RDCP Test message to %04X", desta);
+  char info[INFOLEN];
+  snprintf(info, INFOLEN, "INFO: Sending RDCP Test message to %04X", desta);
   serial_writeln(info);
 
   rm.header.destination  = desta;
   rm.header.message_type = RDCP_MSGTYPE_TEST;
   rm.header.rdcp_payload_length = m.length();
 
-  char buffer[200];
-  m.toCharArray(buffer, 200);
+  char buffer[DATABUFLEN];
+  m.toCharArray(buffer, DATABUFLEN);
   for (int i=0; i<m.length(); i++) rm.payload.data[i] = buffer[i];
 
   rdcp_mg_fill_outgoing_header(&rm);
 
   memcpy(&data, &rm.header, RDCP_HEADER_SIZE);
   for (int i=0; i<rm.header.rdcp_payload_length; i++) data[i + RDCP_HEADER_SIZE] = rm.payload.data[i];
-  rdcp_txqueue_add(data, RDCP_HEADER_SIZE + rm.header.rdcp_payload_length, NOTIMPORTANT, NOTFORCEDTX, TX_CALLBACK_NONE, 0);
+  rdcp_txqueue_add(data, RDCP_HEADER_SIZE + rm.header.rdcp_payload_length, NOTIMPORTANT, NOTFORCEDTX, TX_CALLBACK_NONE, TX_WHEN_CF);
 
   return;
 }
@@ -640,7 +640,7 @@ void rdcp_mg_send_test_message(uint16_t desta, String m)
 void get_inline_hash(struct rdcp_message *m, uint8_t payloadprefixlength, uint8_t *hashtarget)
 {
   /* Prepare the data to be signed */
-  uint8_t data_to_sign[256];
+  uint8_t data_to_sign[DATABUFLEN];
   data_to_sign[0] = m->header.origin % 256;
   data_to_sign[1] = m->header.origin / 256;
   data_to_sign[2] = m->header.sequence_number % 256;
@@ -656,11 +656,11 @@ void get_inline_hash(struct rdcp_message *m, uint8_t payloadprefixlength, uint8_
   SHA256 h = SHA256();
   h.reset();
   h.update(data_to_sign, data_to_sign_length);
-  uint8_t sha[32];
-  h.finalize(sha, 32);
+  uint8_t sha[SHABUFLEN];
+  h.finalize(sha, SHABUFLEN);
 
   /* Copy result to target buffer */
-  for (int i=0; i<32; i++) hashtarget[i] = sha[i];
+  for (int i=0; i<SHABUFLEN; i++) hashtarget[i] = sha[i];
 
   return;
 }
@@ -680,8 +680,8 @@ void rdcp_send_timestamp(uint8_t year, uint8_t month, uint8_t day, uint8_t hour,
   rm.header.counter      = 0x00;
   uint16_t primary_ep = getSuggestedRelay(0); //getEntryPoint(0);
   rm.header.relay1       = (uint8_t) ((primary_ep & 0x000F) * 8) + (uint8_t) 0x0;
-  rm.header.relay2       = 0xEE;
-  rm.header.relay3       = 0xEE;
+  rm.header.relay2       = RDCP_HEADER_RELAY_MAGIC_NONE;
+  rm.header.relay3       = RDCP_HEADER_RELAY_MAGIC_NONE;
 
   /* Prepare the RDCP Payload */
   rm.payload.data[0] = year;
@@ -692,28 +692,28 @@ void rdcp_send_timestamp(uint8_t year, uint8_t month, uint8_t day, uint8_t hour,
   rm.payload.data[5] = status;
 
   /* Create the Schnorr signature */
-  uint8_t sha[32];
+  uint8_t sha[SHABUFLEN];
   get_inline_hash(&rm, 6, sha);
-  uint8_t sig[128];
-  int res = schnorr_create_signature(sha, 32, sig);
+  uint8_t sig[SIGBUFLEN];
+  int res = schnorr_create_signature(sha, SHABUFLEN, sig);
   /* Add the Schnorr signature to the RDCP Payload */
   for (int i=0; i<res; i++) rm.payload.data[6+i] = sig[i];
 
   /* Finalize the RDCP Header by calculating the checksum */
-  uint8_t data_for_crc[256];
-  memcpy(&data_for_crc, &rm.header, RDCP_HEADER_SIZE - 2);
+  uint8_t data_for_crc[DATABUFLEN];
+  memcpy(&data_for_crc, &rm.header, RDCP_HEADER_SIZE - CRC_SIZE);
   for (int i=0; i < rm.header.rdcp_payload_length; i++)
   {
-    data_for_crc[i + RDCP_HEADER_SIZE - 2] = rm.payload.data[i];
+    data_for_crc[i + RDCP_HEADER_SIZE - CRC_SIZE] = rm.payload.data[i];
   }
-  uint16_t actual_crc = crc16(data_for_crc, RDCP_HEADER_SIZE - 2 + rm.header.rdcp_payload_length);
+  uint16_t actual_crc = crc16(data_for_crc, RDCP_HEADER_SIZE - CRC_SIZE + rm.header.rdcp_payload_length);
   rm.header.checksum = actual_crc;
 
   /* Schedule the crafted message for sending */
-  uint8_t data[256];
+  uint8_t data[DATABUFLEN];
   memcpy(&data, &rm.header, RDCP_HEADER_SIZE);
   for (int i=0; i<rm.header.rdcp_payload_length; i++) data[i + RDCP_HEADER_SIZE] = rm.payload.data[i];
-  rdcp_txqueue_add(data, RDCP_HEADER_SIZE + rm.header.rdcp_payload_length, NOTIMPORTANT, NOTFORCEDTX, TX_CALLBACK_NONE, 0);
+  rdcp_txqueue_add(data, RDCP_HEADER_SIZE + rm.header.rdcp_payload_length, NOTIMPORTANT, NOTFORCEDTX, TX_CALLBACK_NONE, TX_WHEN_CF);
 
   return;
 }
@@ -726,11 +726,11 @@ void rdcp_mg_process_incoming_timestamp(void)
     return;
   }
 
-  uint8_t sha[32];
+  uint8_t sha[SHABUFLEN];
   get_inline_hash(&rdcp_msg_in, 6, sha);
-  uint8_t sig[128];
-  for (int i=0; i<65; i++) sig[i] = rdcp_msg_in.payload.data[6+i];
-  bool valid_signature = schnorr_verify_signature(sha, 32, sig);
+  uint8_t sig[SIGBUFLEN];
+  for (int i=0; i<RDCP_SIGNATURE_LENGTH; i++) sig[i] = rdcp_msg_in.payload.data[6+i];
+  bool valid_signature = schnorr_verify_signature(sha, SHABUFLEN, sig);
   if (!valid_signature)
   {
     serial_writeln("WARNING: Invalid HQ Schnorr signature for RDCP Timestamp - ignoring");
@@ -744,8 +744,8 @@ void rdcp_mg_process_incoming_timestamp(void)
   uint8_t minute = rdcp_msg_in.payload.data[4];
   uint8_t status = rdcp_msg_in.payload.data[5];
 
-  char msg[256];
-  snprintf(msg, 256, "INFO: Received valid RDCP Timestamp: %02d.%02d.%04d %02d:%02d (Status %d)", day, month, 2025 + year, hour, minute, status);
+  char msg[INFOLEN];
+  snprintf(msg, INFOLEN, "INFO: Received valid RDCP Timestamp: %02d.%02d.%04d %02d:%02d (Status %d)", day, month, 2025 + year, hour, minute, status);
   serial_writeln(msg);
 
   tdeck_set_time(2025 + year, month, day, hour, minute);
@@ -800,11 +800,11 @@ void rdcp_mg_process_incoming_ack(void)
 
   if (has_signature)
   {
-    uint8_t sha[32];
+    uint8_t sha[SHABUFLEN];
     get_inline_hash(&rdcp_msg_in, 3, sha);
-    uint8_t sig[128];
-    for (int i=0; i<65; i++) sig[i] = rdcp_msg_in.payload.data[3+i];
-    valid_signature = schnorr_verify_signature(sha, 32, sig);
+    uint8_t sig[SIGBUFLEN];
+    for (int i=0; i<RDCP_SIGNATURE_LENGTH; i++) sig[i] = rdcp_msg_in.payload.data[3+i];
+    valid_signature = schnorr_verify_signature(sha, SHABUFLEN, sig);
     if (valid_signature)
     {
       serial_writeln("INFO: RDCP ACK message has valid Schnorr signature from HQ device");
@@ -880,17 +880,17 @@ int64_t rdcp_get_timeslot_duration(uint8_t *data)
   uint16_t airtime = airtime_in_ms(RDCP_HEADER_SIZE + h.rdcp_payload_length);
   uint16_t airtime_with_buffer = airtime + 1000;
 
-  uint8_t nrt = 0;
+  uint8_t nrt = NRT_LOW;
   uint8_t mt = h.message_type;
   if ( (mt == RDCP_MSGTYPE_INFRASTRUCTURE_RESET) || (mt == RDCP_MSGTYPE_ACK) ||
-       (mt == RDCP_MSGTYPE_RESET_ALL_ANNOUNCEMENTS) ) nrt = 2;
+       (mt == RDCP_MSGTYPE_RESET_ALL_ANNOUNCEMENTS) ) nrt = NRT_MIDDLE;
   if ( (mt == RDCP_MSGTYPE_OFFICIAL_ANNOUNCEMENT) || (mt == RDCP_MSGTYPE_CITIZEN_REPORT) ||
-       (mt == RDCP_MSGTYPE_SIGNATURE) ) nrt = 4;
+       (mt == RDCP_MSGTYPE_SIGNATURE) ) nrt = NRT_HIGH;
 
   duration = (nrt+1) * airtime_with_buffer;
 
-  char buf[256];
-  snprintf(buf, 256, "INFO: Queue message timeslot estimation: %llu ms (airtime_buf %u ms, nrt %d)", duration, airtime_with_buffer, nrt);
+  char buf[INFOLEN];
+  snprintf(buf, INFOLEN, "INFO: Queue message timeslot estimation: %llu ms (airtime_buf %u ms, nrt %d)", duration, airtime_with_buffer, nrt);
   serial_writeln(buf);
 
   return duration;
@@ -910,12 +910,12 @@ uint8_t txq_overrun_counter = 0;
 
 bool rdcp_txqueue_add(uint8_t *data, uint8_t len, bool important, bool force_tx, uint8_t callback_selector, int64_t forced_time=0)
 {
-  char info[256];
+  char info[INFOLEN];
   int64_t now = my_millis();
   for (int i=0; i < MAX_TXQUEUE_ENTRIES; i++)
   {
     if (!txq.entries[i].waiting) continue;
-    snprintf(info, 256, "INFO: Previous TXQ i:%02d w:%s f:%s i:%s, o:%" PRId64 ", c:%" PRId64 ", r:%" PRId64,
+    snprintf(info, INFOLEN, "INFO: Previous TXQ i:%02d w:%s f:%s i:%s, o:%" PRId64 ", c:%" PRId64 ", r:%" PRId64,
       i, 
       txq.entries[i].waiting ? "W" : "nW",
       txq.entries[i].force_tx ? "F" : "nF",
@@ -926,7 +926,7 @@ bool rdcp_txqueue_add(uint8_t *data, uint8_t len, bool important, bool force_tx,
     );
     serial_writeln(info);
   }
-  snprintf(info, 256, "INFO: CFEst = %" PRId64 ", rel %" PRId64, CFEst, CFEst-now);
+  snprintf(info, INFOLEN, "INFO: CFEst = %" PRId64 ", rel %" PRId64, CFEst, CFEst-now);
   serial_writeln(info);
 
   if (txq.num_entries == MAX_TXQUEUE_ENTRIES)
@@ -959,7 +959,7 @@ bool rdcp_txqueue_add(uint8_t *data, uint8_t len, bool important, bool force_tx,
       txq.entries[i].callback_selector = callback_selector;
       txq.entries[i].force_tx = force_tx;
       txq.entries[i].important = important;
-      if (forced_time == 0)
+      if (forced_time == NO_TIMESTAMP)
       {
         txq.entries[i].originally_scheduled_time = rdcp_get_channel_free_estimation();
         if (txq.entries[i].originally_scheduled_time < now) txq.entries[i].originally_scheduled_time = now;
@@ -975,8 +975,8 @@ bool rdcp_txqueue_add(uint8_t *data, uint8_t len, bool important, bool force_tx,
       txq.entries[i].cad_retry = 0;
       for (int j=0; j < len; j++) txq.entries[i].payload[j] = data[j];
 
-      char buf[256];
-      snprintf(buf, 256, "INFO: Outgoing message scheduled -> TXQi %d, len %d, TSd %" PRId64 ", @%" PRId64, i, len, txq.entries[i].timeslot_duration, txq.entries[i].currently_scheduled_time);
+      char buf[INFOLEN];
+      snprintf(buf, INFOLEN, "INFO: Outgoing message scheduled -> TXQi %d, len %d, TSd %" PRId64 ", @%" PRId64, i, len, txq.entries[i].timeslot_duration, txq.entries[i].currently_scheduled_time);
       serial_writeln(buf);
 
       return true; // found free spot and added entry, exit loop here.
@@ -1038,11 +1038,11 @@ bool rdcp_txqueue_reschedule(int64_t offset=0)
     }
   }
 
-  char info[256];
+  char info[INFOLEN];
   for (int i=0; i < MAX_TXQUEUE_ENTRIES; i++)
   {
     if (!txq.entries[i].waiting) continue;
-    snprintf(info, 256, "INFO: Rescheduled TXQ i:%02d w:%s f:%s i:%s nr:%d, o:%" PRId64 ", c:%" PRId64 ", r:%" PRId64,
+    snprintf(info, INFOLEN, "INFO: Rescheduled TXQ i:%02d w:%s f:%s i:%s nr:%d, o:%" PRId64 ", c:%" PRId64 ", r:%" PRId64,
       i, 
       txq.entries[i].waiting ? "W" : "nW",
       txq.entries[i].force_tx ? "F" : "nF",
@@ -1054,7 +1054,7 @@ bool rdcp_txqueue_reschedule(int64_t offset=0)
     );
     serial_writeln(info);
   }
-  snprintf(info, 256, "INFO: CFEst = %" PRId64 ", rel %" PRId64, CFEst, CFEst-now);
+  snprintf(info, INFOLEN, "INFO: CFEst = %" PRId64 ", rel %" PRId64, CFEst, CFEst-now);
   serial_writeln(info);
 
   return dropped;
@@ -1062,16 +1062,16 @@ bool rdcp_txqueue_reschedule(int64_t offset=0)
 
 void rdcp_dump_queues(void)
 {
-  char info[256];
+  char info[INFOLEN];
   int64_t now = my_millis();
 
-  snprintf(info, 256, "INFO: QUEUE DUMP TXQ BEGIN, num=%02d/%02d", txq.num_entries, MAX_TXQUEUE_ENTRIES);
+  snprintf(info, INFOLEN, "INFO: QUEUE DUMP TXQ BEGIN, num=%02d/%02d", txq.num_entries, MAX_TXQUEUE_ENTRIES);
   serial_writeln(info);
 
   for (int i=0; i < MAX_TXQUEUE_ENTRIES; i++)
   {
     if (!txq.entries[i].waiting) continue;
-    snprintf(info, 256, "INFO: QUEUE DUMP TXQ i:%02d, l:%03d c:%02X%02X f:%s i:%s t:%s p:%02d, o:%" PRId64 ", c:%" PRId64 ", r:%" PRId64,
+    snprintf(info, INFOLEN, "INFO: QUEUE DUMP TXQ i:%02d, l:%03d c:%02X%02X f:%s i:%s t:%s p:%02d, o:%" PRId64 ", c:%" PRId64 ", r:%" PRId64,
       i, 
       txq.entries[i].payload_length,
       txq.entries[i].payload[RDCP_HEADER_SIZE-1],
@@ -1086,16 +1086,16 @@ void rdcp_dump_queues(void)
     );
     serial_writeln(info);
   }
-  snprintf(info, 256, "INFO: QUEUE DUMP TXQ END, num=%02d/%02d", txq.num_entries, MAX_TXQUEUE_ENTRIES);
+  snprintf(info, INFOLEN, "INFO: QUEUE DUMP TXQ END, num=%02d/%02d", txq.num_entries, MAX_TXQUEUE_ENTRIES);
   serial_writeln(info);
 
-  snprintf(info, 256, "INFO: QUEUE DUMP TXAQ BEGIN, num=%02d/%02d", txaq.num_entries, MAX_TXAHEADQUEUE_ENTRIES);
+  snprintf(info, INFOLEN, "INFO: QUEUE DUMP TXAQ BEGIN, num=%02d/%02d", txaq.num_entries, MAX_TXAHEADQUEUE_ENTRIES);
   serial_writeln(info);
 
   for (int i=0; i < MAX_TXAHEADQUEUE_ENTRIES; i++)
   {
     if (!txaq.entries[i].waiting) continue;
-    snprintf(info, 256, "INFO: QUEUE DUMP TXAQ i:%02d, l:%03d c:%02X%02X f:%s i:%s, o:%" PRId64 ", r:%" PRId64,
+    snprintf(info, INFOLEN, "INFO: QUEUE DUMP TXAQ i:%02d, l:%03d c:%02X%02X f:%s i:%s, o:%" PRId64 ", r:%" PRId64,
       i, 
       txaq.entries[i].payload_length,
       txaq.entries[i].payload[RDCP_HEADER_SIZE-1],
@@ -1107,10 +1107,10 @@ void rdcp_dump_queues(void)
     );
     serial_writeln(info);
   }
-  snprintf(info, 256, "INFO: QUEUE DUMP TXAQ END, num=%02d/%02d", txaq.num_entries, MAX_TXAHEADQUEUE_ENTRIES);
+  snprintf(info, INFOLEN, "INFO: QUEUE DUMP TXAQ END, num=%02d/%02d", txaq.num_entries, MAX_TXAHEADQUEUE_ENTRIES);
   serial_writeln(info);
 
-  snprintf(info, 256, "INFO: Now = %" PRId64 " ms, CFEst = %" PRId64 " ms, rel %" PRId64 " ms", now, CFEst, CFEst-now);
+  snprintf(info, INFOLEN, "INFO: Now = %" PRId64 " ms, CFEst = %" PRId64 " ms, rel %" PRId64 " ms", now, CFEst, CFEst-now);
   serial_writeln(info);
 
   return;
@@ -1120,7 +1120,7 @@ void rdcp_txqueue_compress(void)
 {
   int64_t now = my_millis();
 
-  if (now > rdcp_get_channel_free_estimation() + 10000)
+  if (now > rdcp_get_channel_free_estimation() + 10 * SECONDS_TO_MILLISECONDS)
   { /* Channel is unused for more than 10 seconds; check whether we have something to send earlier. */
     bool has_forced_entry = false;
     int earliest = -1;
@@ -1144,7 +1144,7 @@ void rdcp_txqueue_compress(void)
     if (earliest == -1) return;   // No entry found to send earlier
 
     int64_t delta = txq.entries[earliest].currently_scheduled_time - now;
-    if (delta > 30000)
+    if (delta > 30 * SECONDS_TO_MILLISECONDS)
     {
       for (int i=0; i < MAX_TXQUEUE_ENTRIES; i++)
       {
@@ -1153,8 +1153,8 @@ void rdcp_txqueue_compress(void)
           if (txq.entries[i].force_tx) { continue; }   // should not happen if we reach this code
           if (txq.entries[i].in_process) { continue; } // same
           txq.entries[i].currently_scheduled_time -= delta; 
-          char info[256];
-          snprintf(info, 256, "INFO: Compressed TXQ entry %d by moving it %" PRId64 " ms",
+          char info[INFOLEN];
+          snprintf(info, INFOLEN, "INFO: Compressed TXQ entry %d by moving it %" PRId64 " ms",
             i, delta);
           serial_writeln(info);
         }
@@ -1168,14 +1168,14 @@ void rdcp_txqueue_compress(void)
 bool rdcp_txqueue_loop(void)
 {
   int64_t now = my_millis();
-  char info[256];
+  char info[INFOLEN];
 
   /* Skip if any transmission is already ongoing */
   if (tx_ongoing != -1)
   {
-    if (now - last_tx_activity > 180000)
+    if (now - last_tx_activity > 180 * SECONDS_TO_MILLISECONDS)
     {
-      snprintf(info, 256, "WARNING: TX_Activity Timeout for TXQi %d, restarting TXQ processing", tx_ongoing);
+      snprintf(info, INFOLEN, "WARNING: TX_Activity Timeout for TXQi %d, restarting TXQ processing", tx_ongoing);
       serial_writeln(info);
       txq.entries[tx_ongoing].in_process = false;
       txq.entries[tx_ongoing].cad_retry = 0;
@@ -1214,8 +1214,8 @@ bool rdcp_txqueue_loop(void)
   txq.entries[tx_ongoing].in_process = true;
   tx_process_start = now;
 
-  char buf[256];
-  snprintf(buf, 256, "INFO: Outgoing message up for send-processing -> TXQi %d, len %d, TSd %" PRId64 ", @%" PRId64 ", =%" PRId64,
+  char buf[INFOLEN];
+  snprintf(buf, INFOLEN, "INFO: Outgoing message up for send-processing -> TXQi %d, len %d, TSd %" PRId64 ", @%" PRId64 ", =%" PRId64,
            tx_ongoing, txq.entries[tx_ongoing].payload_length, txq.entries[tx_ongoing].timeslot_duration, txq.entries[tx_ongoing].currently_scheduled_time, now);
   serial_writeln(buf);
 
@@ -1254,8 +1254,8 @@ bool rdcp_txaheadqueue_add(uint8_t *data, uint8_t len, bool important, bool forc
       txaq.entries[i].payload_length = len;
       for (int j=0; j < len; j++) txaq.entries[i].payload[j] = data[j];
 
-      char buf[256];
-      snprintf(buf, 256, "INFO: Delayed message scheduled -> TXAQi %d, len %d, @%" PRId64, i, len, txaq.entries[i].scheduled_time);
+      char buf[INFOLEN];
+      snprintf(buf, INFOLEN, "INFO: Delayed message scheduled -> TXAQi %d, len %d, @%" PRId64, i, len, txaq.entries[i].scheduled_time);
       serial_writeln(buf);
 
       return true; // found free spot and added entry, exit loop here.
@@ -1305,7 +1305,7 @@ bool rdcp_tx_interface(String b64rdcpmsg, int64_t time=TX_WHEN_CF, uint8_t chann
   char decoded_string[decoded_length + 1];
   Base64ren.decode(decoded_string, buffer, b64msg_len);
 
-  uint8_t outgoing_message[256];
+  uint8_t outgoing_message[DATABUFLEN];
 	for (int i=0; i < decoded_length; i++) outgoing_message[i] = decoded_string[i];
 
   if (decoded_length < RDCP_HEADER_SIZE)
@@ -1343,11 +1343,11 @@ void rdcp_update_cfest_out(uint8_t len, uint8_t rcnt, uint8_t mt)
 
   uint32_t remaining_current_sender_time = airtime_with_buffer * rcnt;
 
-  uint8_t nrt = 0;
+  uint8_t nrt = NRT_LOW;
   if ( (mt == RDCP_MSGTYPE_INFRASTRUCTURE_RESET) || (mt == RDCP_MSGTYPE_ACK) ||
-       (mt == RDCP_MSGTYPE_RESET_ALL_ANNOUNCEMENTS) ) nrt = 2;
+       (mt == RDCP_MSGTYPE_RESET_ALL_ANNOUNCEMENTS) ) nrt = NRT_MIDDLE;
   if ( (mt == RDCP_MSGTYPE_OFFICIAL_ANNOUNCEMENT) || (mt == RDCP_MSGTYPE_CITIZEN_REPORT) ||
-       (mt == RDCP_MSGTYPE_SIGNATURE) ) nrt = 4;
+       (mt == RDCP_MSGTYPE_SIGNATURE) ) nrt = NRT_HIGH;
 
   uint32_t timeslot_duration = (nrt+1) * airtime_with_buffer;
   uint8_t future_timeslots = 0;
@@ -1357,8 +1357,8 @@ void rdcp_update_cfest_out(uint8_t len, uint8_t rcnt, uint8_t mt)
 
   rdcp_update_channel_free_estimation(channel_free_at);
 
-  char buf[256];
-  snprintf(buf, 256, "INFO: CFEst4current (out): +%zu ms, @%llu ms (airtime %u ms, retrans %zu ms, timeslot %zu ms, %d fut ts)", 
+  char buf[INFOLEN];
+  snprintf(buf, INFOLEN, "INFO: CFEst4current (out): +%zu ms, @%llu ms (airtime %u ms, retrans %zu ms, timeslot %zu ms, %d fut ts)", 
     channel_free_after, channel_free_at, airtime, remaining_current_sender_time, timeslot_duration, future_timeslots);
   serial_writeln(buf);
 
@@ -1375,18 +1375,18 @@ bool rdcp_send_message_force(void)
   }
   int64_t now = my_millis();
   int64_t timediff = now - txq.entries[tx_ongoing].currently_scheduled_time - retransmission_count * (airtime_in_ms(txq.entries[tx_ongoing].payload_length) + 1000);
-  char buf[256];
-  snprintf(buf, 256, "INFO: TX Start for TXQi %d, len %d, TSd %" PRId64 "ms, latency %" PRId64 " ms", tx_ongoing, txq.entries[tx_ongoing].payload_length, txq.entries[tx_ongoing].timeslot_duration, timediff);
+  char buf[INFOLEN];
+  snprintf(buf, INFOLEN, "INFO: TX Start for TXQi %d, len %d, TSd %" PRId64 "ms, latency %" PRId64 " ms", tx_ongoing, txq.entries[tx_ongoing].payload_length, txq.entries[tx_ongoing].timeslot_duration, timediff);
   serial_writeln(buf);
 
-  snprintf(buf, 256, "TXMETA %d %" PRId64 " %3.3f", txq.entries[tx_ongoing].payload_length, now, getMyLoRaFrequency());
+  snprintf(buf, INFOLEN, "TXMETA %d %" PRId64 " %3.3f", txq.entries[tx_ongoing].payload_length, now, getMyLoRaFrequency());
   serial_writeln(buf);
 
   int encodedLength = Base64ren.encodedLength(txq.entries[tx_ongoing].payload_length);
   char b64msg[encodedLength + 1];
   Base64ren.encode(b64msg, (char *) txq.entries[tx_ongoing].payload, txq.entries[tx_ongoing].payload_length);
 
-  snprintf(buf, 256, "TX %s", b64msg);
+  snprintf(buf, INFOLEN, "TX %s", b64msg);
   serial_writeln(buf);
 
   rdcp_update_cfest_out(txq.entries[tx_ongoing].payload_length, 
@@ -1399,7 +1399,7 @@ bool rdcp_send_message_force(void)
 
 void rdcp_callback_txfin(void)
 {
-  char buf[256];
+  char buf[INFOLEN];
 
   if (tx_ongoing == -1)
   {
@@ -1421,7 +1421,7 @@ void rdcp_callback_txfin(void)
   for (int i=0; i < rm.header.rdcp_payload_length; i++) rm.payload.data[i] = txq.entries[tx_ongoing].payload[RDCP_HEADER_SIZE + i];
   num_retransmissions = rm.header.counter;
 
-  snprintf(buf, 256, "INFO: TXFIN 4 TXQi %d, %d retransmissions ahead, %d/%d more messages waiting", tx_ongoing, num_retransmissions, num_waiting, txq.num_entries);
+  snprintf(buf, INFOLEN, "INFO: TXFIN 4 TXQi %d, %d retransmissions ahead, %d/%d more messages waiting", tx_ongoing, num_retransmissions, num_waiting, txq.num_entries);
   serial_writeln(buf);
 
   txq.entries[tx_ongoing].cad_retry = 0;
@@ -1430,15 +1430,15 @@ void rdcp_callback_txfin(void)
   {
     rm.header.counter -= 1;
 
-    uint8_t data_for_crc[256];
+    uint8_t data_for_crc[DATABUFLEN];
     /* Copy RDCP header and payload into data structure for CRC calculation */
-    memcpy(&data_for_crc, &rm.header, RDCP_HEADER_SIZE - 2);
+    memcpy(&data_for_crc, &rm.header, RDCP_HEADER_SIZE - CRC_SIZE);
     for (int i=0; i < rm.header.rdcp_payload_length; i++)
     {
-      data_for_crc[i + RDCP_HEADER_SIZE - 2] = rm.payload.data[i];
+      data_for_crc[i + RDCP_HEADER_SIZE - CRC_SIZE] = rm.payload.data[i];
     }
     /* Calculate and update CRC */
-    uint16_t actual_crc = crc16(data_for_crc, RDCP_HEADER_SIZE - 2 + rm.header.rdcp_payload_length);
+    uint16_t actual_crc = crc16(data_for_crc, RDCP_HEADER_SIZE - CRC_SIZE + rm.header.rdcp_payload_length);
     rm.header.checksum = actual_crc;
     memcpy(txq.entries[tx_ongoing].payload, &rm.header, RDCP_HEADER_SIZE); // no need to overwrite RDCP payload
 
@@ -1480,11 +1480,11 @@ void rdcp_callback_txfin(void)
 bool rdcp_callback_cad(bool cad_busy)
 {
   bool channel_free = !cad_busy;
-  char buf[256];
+  char buf[INFOLEN];
 
   last_tx_activity = my_millis();
 
-  snprintf(buf, 256, "INFO: Send-processing: CAD reports channel %s (try %d for TXQi%d)", channel_free ? "free" : "busy", txq.entries[tx_ongoing].cad_retry + 1, tx_ongoing);
+  snprintf(buf, INFOLEN, "INFO: Send-processing: CAD reports channel %s (try %d for TXQi%d)", channel_free ? "free" : "busy", txq.entries[tx_ongoing].cad_retry + 1, tx_ongoing);
   serial_writeln(buf);
 
   if (tx_ongoing == -1)
@@ -1531,7 +1531,7 @@ bool rdcp_callback_cad(bool cad_busy)
   }
   else if (retry >= 15)
   {
-    snprintf(buf, 256, "WARNING: CAD retry timeout for TXQi %d, force-sending now", tx_ongoing);
+    snprintf(buf, INFOLEN, "WARNING: CAD retry timeout for TXQi %d, force-sending now", tx_ongoing);
     serial_writeln(buf);
     rdcp_send_message_force();
     return true;
@@ -1570,22 +1570,22 @@ void rdcp_cire_resend(void)
   if (cire_retry > 5)
   {
     cire_retry = 0;
-    for (int i=0; i<16; i++) cire_seqnrs[i] = 0x0000;
+    for (int i=0; i<16; i++) cire_seqnrs[i] = RDCP_NO_SEQUENCE_NUMBER;
     serial_writeln("WARNING: CIRE could not be sent (ACK missing), giving up");
 
     LittleFS.remove(FILENAME_CIRE);
 
-    char gui_text[512];
-    snprintf(gui_text, 512, "WICHTIG: Ihre Meldung %04X-%d konnte anhaltend NICHT an den Krisenstab zugestellt werden. Bitte weichen Sie auf andere Kommunikationswege aus oder versuchen Sie es zu einer anderen Zeit und ggf. von einem anderen Ort aus erneut.", getMyRDCPAddress(), cire_current_refnr);
-    mb_add_local_message(gui_text, cire_current_refnr, ++cire_guitext_num, 60002, true);
+    char gui_text[FATLEN];
+    snprintf(gui_text, FATLEN, "WICHTIG: Ihre Meldung %04X-%d konnte anhaltend NICHT an den Krisenstab zugestellt werden. Bitte weichen Sie auf andere Kommunikationswege aus oder versuchen Sie es zu einer anderen Zeit und ggf. von einem anderen Ort aus erneut.", getMyRDCPAddress(), cire_current_refnr);
+    mb_add_local_message(gui_text, cire_current_refnr, ++cire_guitext_num, RDCP_TWO_DAYS, true);
 
     gui_enable_cire_buttons();
 
     return;
   }
 
-  char buf[256];
-  snprintf(buf, 256, "INFO: Re-sending CIRE %d, re-try #%d", cire_current_refnr, cire_retry);
+  char buf[INFOLEN];
+  snprintf(buf, INFOLEN, "INFO: Re-sending CIRE %d, re-try #%d", cire_current_refnr, cire_retry);
   serial_writeln(buf);
 
   rdcp_send_cire(cire_current_subtype, cire_current_refnr, cire_current_text);
@@ -1618,13 +1618,13 @@ void rdcp_cire_check(void)
   int64_t now = my_millis();
   if (cire_state == CIRE_STATE_WAIT_DA)
   {
-    if (now - cire_starttime > cire_timeout_ack_da * 1000)
+    if (now - cire_starttime > cire_timeout_ack_da * SECONDS_TO_MILLISECONDS)
     {
       serial_writeln("WARNING: CIRE Timeout waiting for ACK from DA");
 
-      char gui_text[512];
-      snprintf(gui_text, 512, "Ihre Meldung %04X-%d wird erneut gesendet, da noch keine Eingangsmeldung von der Infrastruktur vorliegt.", getMyRDCPAddress(), cire_current_refnr);
-      mb_add_local_message(gui_text, cire_current_refnr, ++cire_guitext_num, 60002, true);
+      char gui_text[FATLEN];
+      snprintf(gui_text, FATLEN, "Ihre Meldung %04X-%d wird erneut gesendet, da noch keine Eingangsmeldung von der Infrastruktur vorliegt.", getMyRDCPAddress(), cire_current_refnr);
+      mb_add_local_message(gui_text, cire_current_refnr, ++cire_guitext_num, RDCP_TWO_DAYS, true);
 
       rdcp_cire_resend();
     }
@@ -1636,9 +1636,9 @@ void rdcp_cire_check(void)
     {
       serial_writeln("WARNING: CIRE Timeout waiting for ACK from HQ");
 
-      char gui_text[512];
-      snprintf(gui_text, 512, "Ihre Meldung %04X-%d wird erneut gesendet, da noch keine Eingangsmeldung vom Krisenstab vorliegt.", getMyRDCPAddress(), cire_current_refnr);
-      mb_add_local_message(gui_text, cire_current_refnr, ++cire_guitext_num, 60002, true);
+      char gui_text[FATLEN];
+      snprintf(gui_text, FATLEN, "Ihre Meldung %04X-%d wird erneut gesendet, da noch keine Eingangsmeldung vom Krisenstab vorliegt.", getMyRDCPAddress(), cire_current_refnr);
+      mb_add_local_message(gui_text, cire_current_refnr, ++cire_guitext_num, RDCP_TWO_DAYS, true);
 
       rdcp_cire_resend();
     }
@@ -1666,7 +1666,7 @@ void rdcp_cire_ack(uint16_t origin, uint16_t confirmedseqnr, uint8_t acktype)
     return;
   }
 
-  if ((origin >= 0x0200) && (origin < 0x0300))
+  if ((origin >= RDCP_ADDRESS_DA_LOWERBOUND) && (origin < RDCP_ADDRESS_MG_LOWERBOUND))
   {
     LittleFS.remove(FILENAME_CIRE);
     // Received ACK was from a DA, not by HQ
@@ -1675,22 +1675,22 @@ void rdcp_cire_ack(uint16_t origin, uint16_t confirmedseqnr, uint8_t acktype)
       serial_writeln("INFO: Positive ACK from DA received, waiting for HQ ACK");
       cire_state = CIRE_STATE_WAIT_HQ;
 
-      char gui_text[512];
-      snprintf(gui_text, 512, "Ihre Meldung %04X-%d wird inzwischen von der Infrastruktur zum Krisenstab transportiert. Bitte warten Sie auf weitere Informationen.", getMyRDCPAddress(), cire_current_refnr);
+      char gui_text[FATLEN];
+      snprintf(gui_text, FATLEN, "Ihre Meldung %04X-%d wird inzwischen von der Infrastruktur zum Krisenstab transportiert. Bitte warten Sie auf weitere Informationen.", getMyRDCPAddress(), cire_current_refnr);
       //gui_crisis_add_text(gui_text);
-      mb_add_local_message(gui_text, cire_current_refnr, ++cire_guitext_num, 60002, true);
+      mb_add_local_message(gui_text, cire_current_refnr, ++cire_guitext_num, RDCP_TWO_DAYS, true);
     }
     else if (acktype == RDCP_ACKNOWLEDGMENT_NEGATIVE)
     {
       serial_writeln("INFO: Negative ACK from DA received, aborting CIRE procedure");
       cire_state = CIRE_STATE_NONE;
-      for (int i=0; i<16; i++) cire_seqnrs[i] = 0x0000;
+      for (int i=0; i<16; i++) cire_seqnrs[i] = RDCP_NO_SEQUENCE_NUMBER;
       cire_retry = 0;
 
-      char gui_text[512];
-      snprintf(gui_text, 512, "WICHTIG: Ihre Meldung %04X-%d kann nicht verarbeitet werden, da die Infrastruktur nicht im Krisen-Betriebsmodus ist. Falls Sie Hilfe brauchen, kontaktieren Sie Rettungsdienste oder die Gemeinde bitte anderweitig.", getMyRDCPAddress(), cire_current_refnr);
-      mb_add_local_message(gui_text, cire_current_refnr, ++cire_guitext_num, 60002, true);
-      mb_add_local_message(gui_text, cire_current_refnr, ++cire_guitext_num, 60002, false); // Add message to both crisis and non-crisis screen
+      char gui_text[FATLEN];
+      snprintf(gui_text, FATLEN, "WICHTIG: Ihre Meldung %04X-%d kann nicht verarbeitet werden, da die Infrastruktur nicht im Krisen-Betriebsmodus ist. Falls Sie Hilfe brauchen, kontaktieren Sie Rettungsdienste oder die Gemeinde bitte anderweitig.", getMyRDCPAddress(), cire_current_refnr);
+      mb_add_local_message(gui_text, cire_current_refnr, ++cire_guitext_num, RDCP_TWO_DAYS, true);
+      mb_add_local_message(gui_text, cire_current_refnr, ++cire_guitext_num, RDCP_TWO_DAYS, false); // Add message to both crisis and non-crisis screen
       gui_enable_cire_buttons();
       gui_transition_to_screen(SCREEN_OANONCRISIS);
     }
@@ -1698,9 +1698,9 @@ void rdcp_cire_ack(uint16_t origin, uint16_t confirmedseqnr, uint8_t acktype)
     {
       serial_writeln("INFO: Positive-negative ACK from DA received, waiting for HQ ACK");
       cire_state = CIRE_STATE_WAIT_HQ;
-      char gui_text[512];
-      snprintf(gui_text, 512, "Ihre Meldung %04X-%d wird inzwischen von der Infrastruktur zum Krisenstab transportiert. Bitte warten Sie auf weitere Informationen. Bitte beachten Sie, dass der Krisenstab derzeit nicht besetzt ist.", getMyRDCPAddress(), cire_current_refnr);
-      mb_add_local_message(gui_text, cire_current_refnr, ++cire_guitext_num, 60002, true);
+      char gui_text[FATLEN];
+      snprintf(gui_text, FATLEN, "Ihre Meldung %04X-%d wird inzwischen von der Infrastruktur zum Krisenstab transportiert. Bitte warten Sie auf weitere Informationen. Bitte beachten Sie, dass der Krisenstab derzeit nicht besetzt ist.", getMyRDCPAddress(), cire_current_refnr);
+      mb_add_local_message(gui_text, cire_current_refnr, ++cire_guitext_num, RDCP_TWO_DAYS, true);
     }
     else
     {
@@ -1709,11 +1709,11 @@ void rdcp_cire_ack(uint16_t origin, uint16_t confirmedseqnr, uint8_t acktype)
     }
   }
 
-  if ((origin > 0x0000) && (origin < 0x0100))
+  if ((origin > RDCP_LOCAL_ORIGIN) && (origin < RDCP_ADDRESS_BBKDA_LOWERBOUND))
   {
     // Received ACK was from HQ; in any case, clear current CIRE state:
     LittleFS.remove(FILENAME_CIRE);
-    for (int i=0; i<16; i++) cire_seqnrs[i] = 0x0000;
+    for (int i=0; i<16; i++) cire_seqnrs[i] = RDCP_NO_SEQUENCE_NUMBER;
     cire_retry = 0;
     cire_state = CIRE_STATE_NONE;
     gui_enable_cire_buttons();
@@ -1721,25 +1721,25 @@ void rdcp_cire_ack(uint16_t origin, uint16_t confirmedseqnr, uint8_t acktype)
     if (acktype == RDCP_ACKNOWLEDGMENT_POSITIVE)
     {
       serial_writeln("INFO: Positive ACK from HQ received");
-      char gui_text[512];
-      snprintf(gui_text, 512, "Ihre Meldung %04X-%d ist beim Krisenstab eingegangen. Bitte lassen Sie den Pager eingeschaltet, falls es weitere Informationen oder Fragen zu Ihrer Meldung gibt.", getMyRDCPAddress(), cire_current_refnr);
-      mb_add_local_message(gui_text, cire_current_refnr, ++cire_guitext_num, 60002, true);
+      char gui_text[FATLEN];
+      snprintf(gui_text, FATLEN, "Ihre Meldung %04X-%d ist beim Krisenstab eingegangen. Bitte lassen Sie den Pager eingeschaltet, falls es weitere Informationen oder Fragen zu Ihrer Meldung gibt.", getMyRDCPAddress(), cire_current_refnr);
+      mb_add_local_message(gui_text, cire_current_refnr, ++cire_guitext_num, RDCP_TWO_DAYS, true);
     }
     else if (acktype == RDCP_ACKNOWLEDGMENT_NEGATIVE)
     {
       serial_writeln("INFO: Negative ACK from HQ received");
-      char gui_text[512];
-      snprintf(gui_text, 512, "WICHTIG: Ihre Meldung %04X-%d wurde an die Gemeinde geschickt, kann aber nicht verarbeitet werden, da die Infrastruktur derzeit nicht im Krisen-Betriebsmodus ist. Falls Sie Hilfe brauchen, kontaktieren Sie Rettungsdienste oder die Gemeinde bitte anderweitig.", getMyRDCPAddress(), cire_current_refnr);
-      mb_add_local_message(gui_text, cire_current_refnr, ++cire_guitext_num, 60002, true);
-      mb_add_local_message(gui_text, cire_current_refnr, ++cire_guitext_num, 60002, false); // Add message to both crisis and non-crisis screen
+      char gui_text[FATLEN];
+      snprintf(gui_text, FATLEN, "WICHTIG: Ihre Meldung %04X-%d wurde an die Gemeinde geschickt, kann aber nicht verarbeitet werden, da die Infrastruktur derzeit nicht im Krisen-Betriebsmodus ist. Falls Sie Hilfe brauchen, kontaktieren Sie Rettungsdienste oder die Gemeinde bitte anderweitig.", getMyRDCPAddress(), cire_current_refnr);
+      mb_add_local_message(gui_text, cire_current_refnr, ++cire_guitext_num, RDCP_TWO_DAYS, true);
+      mb_add_local_message(gui_text, cire_current_refnr, ++cire_guitext_num, RDCP_TWO_DAYS, false); // Add message to both crisis and non-crisis screen
       gui_transition_to_screen(SCREEN_OANONCRISIS);
     }
     else if (acktype == RDCP_ACKNOWLEDGMENT_POSNEG)
     {
       serial_writeln("INFO: Positive-negative ACK from HQ received");
-      char gui_text[512];
-      snprintf(gui_text, 512, "Ihre Meldung %04X-%d ist beim Krisenstab eingegangen. Dieser ist derzeit nicht besetzt, wird Ihre Meldung aber noch bearbeiten.", getMyRDCPAddress(), cire_current_refnr);
-      mb_add_local_message(gui_text, cire_current_refnr, ++cire_guitext_num, 60002, true);
+      char gui_text[FATLEN];
+      snprintf(gui_text, FATLEN, "Ihre Meldung %04X-%d ist beim Krisenstab eingegangen. Dieser ist derzeit nicht besetzt, wird Ihre Meldung aber noch bearbeiten.", getMyRDCPAddress(), cire_current_refnr);
+      mb_add_local_message(gui_text, cire_current_refnr, ++cire_guitext_num, RDCP_TWO_DAYS, true);
     }
     else
     {
@@ -1754,7 +1754,7 @@ void rdcp_cire_ack(uint16_t origin, uint16_t confirmedseqnr, uint8_t acktype)
 void rdcp_send_ack_signed(uint16_t origin, uint16_t destination, uint16_t seqnr, uint8_t acktype)
 {
   struct rdcp_message rm;
-  uint8_t data[256];
+  uint8_t data[DATABUFLEN];
 
   rm.header.origin = origin;
   rm.header.sender = origin;
@@ -1764,9 +1764,9 @@ void rdcp_send_ack_signed(uint16_t origin, uint16_t destination, uint16_t seqnr,
   rm.header.sequence_number = get_next_rdcp_sequence_number(origin);
   uint16_t primary_ep = getSuggestedRelay(0); //getEntryPoint(0);
   rm.header.relay1 = (uint8_t) ((primary_ep & 0x000F) * 8) + (uint8_t) 0x0;
-  if ((origin >= 0x0100) && (origin < 0x0300)) rm.header.relay1 = 0xEE; // don't use an Entry Point when spoofing a DA
-  rm.header.relay2 = 0xEE;
-  rm.header.relay3 = 0xEE;
+  if ((origin >= RDCP_ADDRESS_BBKDA_LOWERBOUND) && (origin < RDCP_ADDRESS_MG_LOWERBOUND)) rm.header.relay1 = RDCP_HEADER_RELAY_MAGIC_NONE; // don't use an Entry Point when spoofing a DA
+  rm.header.relay2 = RDCP_HEADER_RELAY_MAGIC_NONE;
+  rm.header.relay3 = RDCP_HEADER_RELAY_MAGIC_NONE;
 
   rm.payload.data[0] = seqnr % 256;
   rm.payload.data[1] = seqnr / 256;
@@ -1775,7 +1775,7 @@ void rdcp_send_ack_signed(uint16_t origin, uint16_t destination, uint16_t seqnr,
   rm.header.rdcp_payload_length = 3 + RDCP_SIGNATURE_LENGTH; // 3 bytes payload, 65 bytes signature
 
   /* Prepare the data to be signed */
-  uint8_t data_to_sign[256];
+  uint8_t data_to_sign[DATABUFLEN];
   data_to_sign[0] = rm.header.origin % 256;
   data_to_sign[1] = rm.header.origin / 256;
   data_to_sign[2] = rm.header.sequence_number % 256;
@@ -1793,30 +1793,30 @@ void rdcp_send_ack_signed(uint16_t origin, uint16_t destination, uint16_t seqnr,
   SHA256 h = SHA256();
   h.reset();
   h.update(data_to_sign, data_to_sign_length);
-  uint8_t sha[32];
-  h.finalize(sha, 32);
+  uint8_t sha[SHABUFLEN];
+  h.finalize(sha, SHABUFLEN);
 
   /* Create the Schnorr signature */
-  uint8_t sig[128];
-  int res = schnorr_create_signature(sha, 32, sig);
+  uint8_t sig[SIGBUFLEN];
+  int res = schnorr_create_signature(sha, SHABUFLEN, sig);
 
   /* Add the Schnorr signature to the RDCP Payload */
   for (int i=0; i<res; i++) rm.payload.data[3+i] = sig[i];
 
   /* Finalize the RDCP Header by calculating the checksum */
-  uint8_t data_for_crc[256];
-  memcpy(&data_for_crc, &rm.header, RDCP_HEADER_SIZE - 2);
+  uint8_t data_for_crc[DATABUFLEN];
+  memcpy(&data_for_crc, &rm.header, RDCP_HEADER_SIZE - CRC_SIZE);
   for (int i=0; i < rm.header.rdcp_payload_length; i++)
   {
-    data_for_crc[i + RDCP_HEADER_SIZE - 2] = rm.payload.data[i];
+    data_for_crc[i + RDCP_HEADER_SIZE - CRC_SIZE] = rm.payload.data[i];
   }
-  uint16_t actual_crc = crc16(data_for_crc, RDCP_HEADER_SIZE - 2 + rm.header.rdcp_payload_length);
+  uint16_t actual_crc = crc16(data_for_crc, RDCP_HEADER_SIZE - CRC_SIZE + rm.header.rdcp_payload_length);
   rm.header.checksum = actual_crc;
 
   /* Schedule the crafted message for sending */
   memcpy(&data, &rm.header, RDCP_HEADER_SIZE);
   for (int i=0; i<rm.header.rdcp_payload_length; i++) data[i + RDCP_HEADER_SIZE] = rm.payload.data[i];
-  rdcp_txqueue_add(data, RDCP_HEADER_SIZE + rm.header.rdcp_payload_length, IMPORTANT, NOTFORCEDTX, TX_CALLBACK_NONE, 0);
+  rdcp_txqueue_add(data, RDCP_HEADER_SIZE + rm.header.rdcp_payload_length, IMPORTANT, NOTFORCEDTX, TX_CALLBACK_NONE, TX_WHEN_CF);
 
   return;
 }
@@ -1824,7 +1824,7 @@ void rdcp_send_ack_signed(uint16_t origin, uint16_t destination, uint16_t seqnr,
 void rdcp_send_ack_unsigned(uint16_t origin, uint16_t destination, uint16_t seqnr, uint8_t acktype)
 {
   struct rdcp_message rm;
-  uint8_t data[256];
+  uint8_t data[DATABUFLEN];
 
   rm.header.origin = origin;
   rm.header.sender = origin;
@@ -1834,9 +1834,9 @@ void rdcp_send_ack_unsigned(uint16_t origin, uint16_t destination, uint16_t seqn
   rm.header.sequence_number = get_next_rdcp_sequence_number(origin);
   uint16_t primary_ep = getSuggestedRelay(0); //getEntryPoint(0);
   rm.header.relay1 = (uint8_t) ((primary_ep & 0x000F) * 8) + (uint8_t) 0x0;
-  if ((origin >= 0x0100) && (origin < 0x0300)) rm.header.relay1 = 0xEE; // don't use an Entry Point when spoofing a DA
-  rm.header.relay2 = 0xEE;
-  rm.header.relay3 = 0xEE;
+  if ((origin >= RDCP_ADDRESS_BBKDA_LOWERBOUND) && (origin < RDCP_ADDRESS_MG_LOWERBOUND)) rm.header.relay1 = RDCP_HEADER_RELAY_MAGIC_NONE; // don't use an Entry Point when spoofing a DA
+  rm.header.relay2 = RDCP_HEADER_RELAY_MAGIC_NONE;
+  rm.header.relay3 = RDCP_HEADER_RELAY_MAGIC_NONE;
 
   rm.payload.data[0] = seqnr % 256;
   rm.payload.data[1] = seqnr / 256;
@@ -1845,19 +1845,19 @@ void rdcp_send_ack_unsigned(uint16_t origin, uint16_t destination, uint16_t seqn
   rm.header.rdcp_payload_length = 3; // 3 bytes payload, unsigned
 
   /* Finalize the RDCP Header by calculating the checksum */
-  uint8_t data_for_crc[256];
-  memcpy(&data_for_crc, &rm.header, RDCP_HEADER_SIZE - 2);
+  uint8_t data_for_crc[DATABUFLEN];
+  memcpy(&data_for_crc, &rm.header, RDCP_HEADER_SIZE - CRC_SIZE);
   for (int i=0; i < rm.header.rdcp_payload_length; i++)
   {
-    data_for_crc[i + RDCP_HEADER_SIZE - 2] = rm.payload.data[i];
+    data_for_crc[i + RDCP_HEADER_SIZE - CRC_SIZE] = rm.payload.data[i];
   }
-  uint16_t actual_crc = crc16(data_for_crc, RDCP_HEADER_SIZE - 2 + rm.header.rdcp_payload_length);
+  uint16_t actual_crc = crc16(data_for_crc, RDCP_HEADER_SIZE - CRC_SIZE + rm.header.rdcp_payload_length);
   rm.header.checksum = actual_crc;
 
   /* Schedule the crafted message for sending */
   memcpy(&data, &rm.header, RDCP_HEADER_SIZE);
   for (int i=0; i<rm.header.rdcp_payload_length; i++) data[i + RDCP_HEADER_SIZE] = rm.payload.data[i];
-  rdcp_txqueue_add(data, RDCP_HEADER_SIZE + rm.header.rdcp_payload_length, IMPORTANT, NOTFORCEDTX, TX_CALLBACK_NONE, 0);
+  rdcp_txqueue_add(data, RDCP_HEADER_SIZE + rm.header.rdcp_payload_length, IMPORTANT, NOTFORCEDTX, TX_CALLBACK_NONE, TX_WHEN_CF);
 
   return;
 }
@@ -1865,7 +1865,7 @@ void rdcp_send_ack_unsigned(uint16_t origin, uint16_t destination, uint16_t seqn
 struct cirefileentry {
   uint8_t subtype;
   uint16_t refnr;
-  char text[256];
+  char text[DATABUFLEN];
 };
 
 cirefileentry cfile;
@@ -1888,18 +1888,18 @@ void rdcp_check_cirefile(void)
 void rdcp_send_cire(uint8_t subtype, uint16_t refnr, char *text)
 {
   struct rdcp_message rm;
-  uint8_t data[256];
+  uint8_t data[DATABUFLEN];
 
   /* Save the information for later re-try events. */
   cire_current_subtype = subtype;
   cire_current_refnr = refnr;
-  snprintf(cire_current_text, 256, "%s", text);
+  snprintf(cire_current_text, DATABUFLEN, "%s", text);
 
   if (hasStorage)
   {
     cfile.subtype = subtype;
     cfile.refnr = refnr;
-    snprintf(cfile.text, 256, "%s", text);
+    snprintf(cfile.text, DATABUFLEN, "%s", text);
     File cf = LittleFS.open(FILENAME_CIRE, FILE_WRITE);
     if (cf)
     {
@@ -1921,8 +1921,8 @@ void rdcp_send_cire(uint8_t subtype, uint16_t refnr, char *text)
   uint16_t primary_ep = getSuggestedRelay(cire_retry); //getEntryPoint(cire_retry);
   cire_current_ep = primary_ep;
   rm.header.relay1 = (uint8_t) ((primary_ep & 0x000F) * 8) + (uint8_t) 0x0;
-  rm.header.relay2 = 0xEE;
-  rm.header.relay3 = 0xEE;
+  rm.header.relay2 = RDCP_HEADER_RELAY_MAGIC_NONE;
+  rm.header.relay3 = RDCP_HEADER_RELAY_MAGIC_NONE;
 
   /* Prepare the MT-specific header at the beginning of the RDCP Payload */
   rm.payload.data[0] = subtype;
@@ -1930,7 +1930,7 @@ void rdcp_send_cire(uint8_t subtype, uint16_t refnr, char *text)
   rm.payload.data[2] = refnr / 256;
 
   /* Convert the text message to its Unishox2 representation */
-  char buf[256];
+  char buf[INFOLEN];
   unsigned int len = strlen(text);
   memset(buf, 0, sizeof(buf));
   int c_total = unishox2_compress_simple(text, len, buf);
@@ -1942,12 +1942,12 @@ void rdcp_send_cire(uint8_t subtype, uint16_t refnr, char *text)
   }
 
   /* RDCP Payload length is subheader length (3) + Unishox2 length + AES-GMC AuthTag size (16) */
-  rm.header.rdcp_payload_length = 3 + c_total + 16;
+  rm.header.rdcp_payload_length = 3 + c_total + AESTAGSIZE;
 
   /* AES-GCM encrypt the RDCP Payload */
-  uint8_t ciphertext[256];
+  uint8_t ciphertext[DATABUFLEN];
   uint8_t iv[12];
-  uint8_t gcmauthtag[16];
+  uint8_t gcmauthtag[AESTAGSIZE];
   uint8_t additional_data[8];
   uint8_t additional_data_size = 8;
 
@@ -1962,40 +1962,40 @@ void rdcp_send_cire(uint8_t subtype, uint16_t refnr, char *text)
   iv[7] = rm.header.rdcp_payload_length;
   for (int i=0; i<additional_data_size; i++) additional_data[i] = iv[i];
 
-  encrypt_aes256gcm((uint8_t *) &rm.payload.data, rm.header.rdcp_payload_length - 16,
+  encrypt_aes256gcm((uint8_t *) &rm.payload.data, rm.header.rdcp_payload_length - AESTAGSIZE,
                     additional_data, additional_data_size,
                     getHQsharedSecret(), 32,
                     iv, 12,
-                    ciphertext, gcmauthtag, 16);
+                    ciphertext, gcmauthtag, AESTAGSIZE);
 
   /* Copy ciphertext and GCM AuthTag into the RDCP Payload */
-  for (int i=0; i<rm.header.rdcp_payload_length-16; i++) rm.payload.data[i] = ciphertext[i];
-  for (int i=0; i<16; i++) rm.payload.data[rm.header.rdcp_payload_length-16+i] = gcmauthtag[i];
+  for (int i=0; i<rm.header.rdcp_payload_length-AESTAGSIZE; i++) rm.payload.data[i] = ciphertext[i];
+  for (int i=0; i<16; i++) rm.payload.data[rm.header.rdcp_payload_length-AESTAGSIZE+i] = gcmauthtag[i];
 
   /* Finalize the RDCP Header by calculating the checksum */
-  uint8_t data_for_crc[256];
-  memcpy(&data_for_crc, &rm.header, RDCP_HEADER_SIZE - 2);
+  uint8_t data_for_crc[DATABUFLEN];
+  memcpy(&data_for_crc, &rm.header, RDCP_HEADER_SIZE - CRC_SIZE);
   for (int i=0; i < rm.header.rdcp_payload_length; i++)
   {
-    data_for_crc[i + RDCP_HEADER_SIZE - 2] = rm.payload.data[i];
+    data_for_crc[i + RDCP_HEADER_SIZE - CRC_SIZE] = rm.payload.data[i];
   }
-  uint16_t actual_crc = crc16(data_for_crc, RDCP_HEADER_SIZE - 2 + rm.header.rdcp_payload_length);
+  uint16_t actual_crc = crc16(data_for_crc, RDCP_HEADER_SIZE - CRC_SIZE + rm.header.rdcp_payload_length);
   rm.header.checksum = actual_crc;
 
   /* Schedule the crafted message for sending */
   memcpy(&data, &rm.header, RDCP_HEADER_SIZE);
   for (int i=0; i<rm.header.rdcp_payload_length; i++) data[i + RDCP_HEADER_SIZE] = rm.payload.data[i];
-  rdcp_txqueue_add(data, RDCP_HEADER_SIZE + rm.header.rdcp_payload_length, IMPORTANT, NOTFORCEDTX, TX_CALLBACK_CIRE, 0);
+  rdcp_txqueue_add(data, RDCP_HEADER_SIZE + rm.header.rdcp_payload_length, IMPORTANT, NOTFORCEDTX, TX_CALLBACK_CIRE, TX_WHEN_CF);
 
   return;
 }
 
-int64_t last_heartbeat_sent = 0;
-int64_t default_heartbeat_interval = 30 * 60 * 1000; // 30 minute default heartbeat interval
-int64_t heartbeat_interval = 30 * 60 * 1000; // current heartbeat interval
-int64_t initial_grace_period = 20000; // do not send heartbeats this long after turning on the device
-int64_t heartbeat_max_interval = 60 * 60 * 1000;
-int64_t heartbeat_interval_increment = 20 * 1000;
+int64_t last_heartbeat_sent = NO_TIMESTAMP;
+int64_t default_heartbeat_interval = 30 * MINUTES_TO_MILLISECONDS; // 30 minute default heartbeat interval
+int64_t heartbeat_interval = 30 * MINUTES_TO_MILLISECONDS; // current heartbeat interval
+int64_t initial_grace_period = 20 * SECONDS_TO_MILLISECONDS; // do not send heartbeats this long after turning on the device
+int64_t heartbeat_max_interval = 60 * MINUTES_TO_MILLISECONDS;
+int64_t heartbeat_interval_increment = 20 * SECONDS_TO_MILLISECONDS;
 
 void set_heartbeat_interval(int64_t new_interval)
 {
@@ -2017,7 +2017,7 @@ void rdcp_heartbeat_send(void)
   serial_writeln("INFO: Sending HEARTBEAT message for this device");
 
   struct rdcp_message rm;
-  uint8_t data[256];
+  uint8_t data[DATABUFLEN];
 
   uint16_t me = getMyRDCPAddress();
   rm.header.origin = me;
@@ -2026,28 +2026,28 @@ void rdcp_heartbeat_send(void)
   rm.header.message_type = RDCP_MSGTYPE_HEARTBEAT;
   rm.header.rdcp_payload_length = 4;
   rm.header.counter = 0;
-  rm.header.sequence_number = 0x0000; // special for Heartbeat messages
-  rm.header.relay1 = 0xEE; // special for Heartbeat messages
-  rm.header.relay2 = 0xEE;
-  rm.header.relay3 = 0xEE;
+  rm.header.sequence_number = RDCP_NO_SEQUENCE_NUMBER; // special for Heartbeat messages
+  rm.header.relay1 = RDCP_HEADER_RELAY_MAGIC_NONE; // special for Heartbeat messages
+  rm.header.relay2 = RDCP_HEADER_RELAY_MAGIC_NONE;
+  rm.header.relay3 = RDCP_HEADER_RELAY_MAGIC_NONE;
 
   rm.payload.data[0] = highest_oa_refnr % 256;
   rm.payload.data[1] = highest_oa_refnr / 256;
-  uint16_t roam = getRoamingRecommendation(15*60*1000);
+  uint16_t roam = getRoamingRecommendation(15*MINUTES_TO_MILLISECONDS);
   rm.payload.data[2] = roam % 256;
   rm.payload.data[3] = roam / 256;
 
   /* Finalize the RDCP Header by calculating the checksum */
-  uint8_t data_for_crc[256];
-  memcpy(&data_for_crc, &rm.header, RDCP_HEADER_SIZE - 2);
-  for (int i=0; i<4; i++) data_for_crc[RDCP_HEADER_SIZE - 2 + i] = rm.payload.data[i];
-  uint16_t actual_crc = crc16(data_for_crc, RDCP_HEADER_SIZE - 2 + 4);
+  uint8_t data_for_crc[DATABUFLEN];
+  memcpy(&data_for_crc, &rm.header, RDCP_HEADER_SIZE - CRC_SIZE);
+  for (int i=0; i<4; i++) data_for_crc[RDCP_HEADER_SIZE - CRC_SIZE + i] = rm.payload.data[i];
+  uint16_t actual_crc = crc16(data_for_crc, RDCP_HEADER_SIZE - CRC_SIZE + 4);
   rm.header.checksum = actual_crc;
 
   /* Schedule the crafted message for sending */
   memcpy(&data, &rm.header, RDCP_HEADER_SIZE);
   for (int i=0; i<4; i++) data[RDCP_HEADER_SIZE + i] = rm.payload.data[i];
-  rdcp_txqueue_add(data, RDCP_HEADER_SIZE + 4, NOTIMPORTANT, NOTFORCEDTX, TX_CALLBACK_NONE, 0);
+  rdcp_txqueue_add(data, RDCP_HEADER_SIZE + 4, NOTIMPORTANT, NOTFORCEDTX, TX_CALLBACK_NONE, TX_WHEN_CF);
 
   return;
 }
@@ -2067,7 +2067,7 @@ void rdcp_heartbeat_check(void)
   uint8_t current_screen = gui_get_current_screen();
   if ((current_screen != SCREEN_OACRISIS) && (current_screen != SCREEN_OANONCRISIS) && (current_screen != SCREEN_EULA)) return; // last was SPLASH
 
-  if ((last_heartbeat_sent == 0) || (now - last_heartbeat_sent > heartbeat_interval))
+  if ((last_heartbeat_sent == NO_TIMESTAMP) || (now - last_heartbeat_sent > heartbeat_interval))
   {
     // Send if channel is free, re-schedule if it is currently busy
     if ((now >= rdcp_get_channel_free_estimation()) && (true)) // is_screensaver_on()))
@@ -2088,10 +2088,10 @@ void rdcp_heartbeat_check(void)
 void rdcp_mg_process_incoming_private_oa(void)
 {
   /* Official Announcements sent to a single device are symetrically encrypted. */
-  uint8_t ciphertext[256];
-  uint8_t plaintext[256];
+  uint8_t ciphertext[DATABUFLEN];
+  uint8_t plaintext[DATABUFLEN];
   uint8_t iv[12];
-  uint8_t gcmauthtag[16];
+  uint8_t gcmauthtag[AESTAGSIZE];
   uint8_t additional_data[8];
   uint8_t additional_data_size = 8;
 
@@ -2106,11 +2106,11 @@ void rdcp_mg_process_incoming_private_oa(void)
   iv[7] = rdcp_msg_in.header.rdcp_payload_length;
   for (int i=0; i<additional_data_size; i++) additional_data[i] = iv[i];
 
-  for (int i=0; i<rdcp_msg_in.header.rdcp_payload_length - 16; i++) ciphertext[i] = rdcp_msg_in.payload.data[i];
-  for (int i=0; i<16; i++) gcmauthtag[i] = rdcp_msg_in.payload.data[rdcp_msg_in.header.rdcp_payload_length - 16 + i];
+  for (int i=0; i<rdcp_msg_in.header.rdcp_payload_length - AESTAGSIZE; i++) ciphertext[i] = rdcp_msg_in.payload.data[i];
+  for (int i=0; i<16; i++) gcmauthtag[i] = rdcp_msg_in.payload.data[rdcp_msg_in.header.rdcp_payload_length - AESTAGSIZE + i];
 
-  if (!decrypt_aes256gcm(ciphertext, rdcp_msg_in.header.rdcp_payload_length - 16,
-      additional_data, additional_data_size, getHQsharedSecret(), 32, iv, 12, gcmauthtag, 16, plaintext))
+  if (!decrypt_aes256gcm(ciphertext, rdcp_msg_in.header.rdcp_payload_length - AESTAGSIZE,
+      additional_data, additional_data_size, getHQsharedSecret(), 32, iv, 12, gcmauthtag, AESTAGSIZE, plaintext))
   {
     serial_writeln("WARNING: Authenticated decryption failed - bad key oder data");
     return;
@@ -2120,20 +2120,20 @@ void rdcp_mg_process_incoming_private_oa(void)
   uint16_t refnr = plaintext[1] + 256 * plaintext[2];
   uint16_t lifetime = plaintext[3] + 256 * plaintext[4];
   uint8_t morefragments = plaintext[5];
-  uint8_t uuContent[256];
+  uint8_t uuContent[DATABUFLEN];
 
   if (subtype != RDCP_MSGTYPE_OA_SUBTYPE_UPDATE)
   {
-    for (int i=0; i<rdcp_msg_in.header.rdcp_payload_length - 16 - 6; i++) uuContent[i] = plaintext[i+6];
-    uuContent[rdcp_msg_in.header.rdcp_payload_length - 16 - 6] = 0;
+    for (int i=0; i<rdcp_msg_in.header.rdcp_payload_length - RDCP_HEADER_SIZE - 6; i++) uuContent[i] = plaintext[i+6];
+    uuContent[rdcp_msg_in.header.rdcp_payload_length - RDCP_HEADER_SIZE - 6] = 0;
 
-    char info[512];
-    int msg_len = rdcp_msg_in.header.rdcp_payload_length - 16 - 6; // without GCM Tag and OA Subheader
+    char info[FATLEN];
+    int msg_len = rdcp_msg_in.header.rdcp_payload_length - AESTAGSIZE - 6; // without GCM Tag and OA Subheader
     char oa[1024];
     unsigned int len = unishox2_decompress_simple((char*)uuContent, msg_len, oa);
     oa[len] = 0;
 
-    snprintf(info, 512, "INFO: Received Private OA, type %02X, refnr %04X, content: %s", subtype, refnr, oa);
+    snprintf(info, FATLEN, "INFO: Received Private OA, type %02X, refnr %04X, content: %s", subtype, refnr, oa);
     serial_writeln(info);
 
     if (subtype == RDCP_MSGTYPE_OA_SUBTYPE_CRISIS_TXT)
@@ -2175,7 +2175,7 @@ void rdcp_mg_process_incoming_private_oa(void)
   return;
 }
 
-uint16_t current_inquiry_refnr = 0x0000;
+uint16_t current_inquiry_refnr = RDCP_NO_REFERENCE_NUMBER;
 uint16_t get_current_inquiry_refnr(void)
 {
   return current_inquiry_refnr;
@@ -2193,20 +2193,20 @@ void rdcp_mg_process_incoming_public_oa(void)
   uint16_t refnr = rdcp_msg_in.payload.data[1] + 256 * rdcp_msg_in.payload.data[2];
   uint16_t lifetime = rdcp_msg_in.payload.data[3] + 256 * rdcp_msg_in.payload.data[4];
   uint8_t morefragments = rdcp_msg_in.payload.data[5];
-  uint8_t uuContent[256];
+  uint8_t uuContent[DATABUFLEN];
 
   if (subtype != RDCP_MSGTYPE_OA_SUBTYPE_UPDATE)
   {
     for (int i=0; i<rdcp_msg_in.header.rdcp_payload_length - 6; i++) uuContent[i] = rdcp_msg_in.payload.data[i+6];
     uuContent[rdcp_msg_in.header.rdcp_payload_length - 6] = 0;
 
-    char info[512];
+    char info[FATLEN];
     int msg_len = rdcp_msg_in.header.rdcp_payload_length - 6; // without OA Subheader
     char oa[1024];
     unsigned int len = unishox2_decompress_simple((char*)uuContent, msg_len, oa);
     oa[len] = 0;
 
-    snprintf(info, 512, "INFO: Received Public OA, type %02X, refnr %04X, content: %s", subtype, refnr, oa);
+    snprintf(info, FATLEN, "INFO: Received Public OA, type %02X, refnr %04X, content: %s", subtype, refnr, oa);
     serial_writeln(info);
 
     if (subtype == RDCP_MSGTYPE_OA_SUBTYPE_CRISIS_TXT)
@@ -2249,11 +2249,11 @@ void rdcp_mg_process_incoming_public_oa(void)
 void rdcp_mg_process_signature(void)
 {
   uint16_t refnr = rdcp_msg_in.payload.data[0] + 256 * rdcp_msg_in.payload.data[1];
-  uint8_t schnorrsig[128];
+  uint8_t schnorrsig[SIGBUFLEN];
   for (int i=0; i<rdcp_msg_in.header.rdcp_payload_length - 2; i++) schnorrsig[i] = rdcp_msg_in.payload.data[i+2];
 
-  char info[128];
-  snprintf(info, 128, "INFO: Received SIGNATURE for %04X-%04X", rdcp_msg_in.header.origin, refnr);
+  char info[INFOLEN];
+  snprintf(info, INFOLEN, "INFO: Received SIGNATURE for %04X-%04X", rdcp_msg_in.header.origin, refnr);
   serial_writeln(info);
 
   mb_add_signature(schnorrsig, rdcp_msg_in.header.origin, refnr);
@@ -2271,13 +2271,13 @@ void rdcp_mg_process_resetoa(void)
     return;
   }
 
-  uint8_t sha[32];
+  uint8_t sha[SHABUFLEN];
   get_inline_hash(&rdcp_msg_in, 0, sha);
 
-  uint8_t sig[128];
-  for (int i=0; i<65; i++) sig[i] = rdcp_msg_in.payload.data[0+i];
+  uint8_t sig[SIGBUFLEN];
+  for (int i=0; i<RDCP_SIGNATURE_LENGTH; i++) sig[i] = rdcp_msg_in.payload.data[0+i];
 
-  valid = schnorr_verify_signature(sha, 32, sig);
+  valid = schnorr_verify_signature(sha, SHABUFLEN, sig);
   if (valid)
   {
     mb_clear_history();
@@ -2301,13 +2301,13 @@ void rdcp_mg_process_resetinfrastructure(void)
     return;
   }
 
-  uint8_t sha[32];
+  uint8_t sha[SHABUFLEN];
   get_inline_hash(&rdcp_msg_in, 2, sha);
 
-  uint8_t sig[128];
-  for (int i=0; i<65; i++) sig[i] = rdcp_msg_in.payload.data[2+i];
+  uint8_t sig[SIGBUFLEN];
+  for (int i=0; i<RDCP_SIGNATURE_LENGTH; i++) sig[i] = rdcp_msg_in.payload.data[2+i];
 
-  valid = schnorr_verify_signature(sha, 32, sig);
+  valid = schnorr_verify_signature(sha, SHABUFLEN, sig);
   if (valid)
   {
     uint16_t nonce = rdcp_msg_in.payload.data[0] + 256 * rdcp_msg_in.payload.data[1];
@@ -2345,13 +2345,13 @@ void rdcp_mg_process_resetdevice(void)
     return;
   }
 
-  uint8_t sha[32];
+  uint8_t sha[SHABUFLEN];
   get_inline_hash(&rdcp_msg_in, 2, sha);
 
-  uint8_t sig[128];
-  for (int i=0; i<65; i++) sig[i] = rdcp_msg_in.payload.data[2+i];
+  uint8_t sig[SIGBUFLEN];
+  for (int i=0; i<RDCP_SIGNATURE_LENGTH; i++) sig[i] = rdcp_msg_in.payload.data[2+i];
 
-  valid = schnorr_verify_signature(sha, 32, sig);
+  valid = schnorr_verify_signature(sha, SHABUFLEN, sig);
   if (valid)
   {
     uint16_t nonce = rdcp_msg_in.payload.data[0] + 256 * rdcp_msg_in.payload.data[1];
@@ -2388,13 +2388,13 @@ void rdcp_mg_process_rebootdevice(void)
     return;
   }
 
-  uint8_t sha[32];
+  uint8_t sha[SHABUFLEN];
   get_inline_hash(&rdcp_msg_in, 2, sha);
 
-  uint8_t sig[128];
-  for (int i=0; i<65; i++) sig[i] = rdcp_msg_in.payload.data[2+i];
+  uint8_t sig[SIGBUFLEN];
+  for (int i=0; i<RDCP_SIGNATURE_LENGTH; i++) sig[i] = rdcp_msg_in.payload.data[2+i];
 
-  valid = schnorr_verify_signature(sha, 32, sig);
+  valid = schnorr_verify_signature(sha, SHABUFLEN, sig);
   if (valid)
   {
     uint16_t nonce = rdcp_msg_in.payload.data[0] + 256 * rdcp_msg_in.payload.data[1];
@@ -2429,13 +2429,13 @@ void rdcp_mg_process_maintenance(void)
     return;
   }
 
-  uint8_t sha[32];
+  uint8_t sha[SHABUFLEN];
   get_inline_hash(&rdcp_msg_in, 2, sha);
 
-  uint8_t sig[128];
-  for (int i=0; i<65; i++) sig[i] = rdcp_msg_in.payload.data[2+i];
+  uint8_t sig[SIGBUFLEN];
+  for (int i=0; i<RDCP_SIGNATURE_LENGTH; i++) sig[i] = rdcp_msg_in.payload.data[2+i];
 
-  valid = schnorr_verify_signature(sha, 32, sig);
+  valid = schnorr_verify_signature(sha, SHABUFLEN, sig);
   if (valid)
   {
     uint16_t nonce = rdcp_msg_in.payload.data[0] + 256 * rdcp_msg_in.payload.data[1];
@@ -2466,9 +2466,9 @@ void rdcp_mg_process_maintenance(void)
 bool device_is_locked = false;
 
 struct lockentry {
-  uint16_t duration = 0;
-  int64_t time_added = 0;
-  time_t absexp = 0;
+  uint16_t duration = NO_DURATION;
+  int64_t time_added = NO_TIMESTAMP;
+  time_t absexp = NO_TIMESTAMP;
 };
 
 lockentry locke;
@@ -2548,13 +2548,13 @@ void rdcp_mg_process_blockalert(void)
     return;
   }
 
-  uint8_t sha[32];
+  uint8_t sha[SHABUFLEN];
   get_inline_hash(&rdcp_msg_in, 4, sha);
 
-  uint8_t sig[128];
-  for (int i=0; i<65; i++) sig[i] = rdcp_msg_in.payload.data[4+i];
+  uint8_t sig[SIGBUFLEN];
+  for (int i=0; i<RDCP_SIGNATURE_LENGTH; i++) sig[i] = rdcp_msg_in.payload.data[4+i];
 
-  valid = schnorr_verify_signature(sha, 32, sig);
+  valid = schnorr_verify_signature(sha, SHABUFLEN, sig);
   if (valid)
   {
     uint16_t targetdevice = rdcp_msg_in.payload.data[0] + 256 * rdcp_msg_in.payload.data[1];
@@ -2562,7 +2562,7 @@ void rdcp_mg_process_blockalert(void)
 
     if (targetdevice == getMyRDCPAddress())
     {
-      if (duration > 0)
+      if (duration > NO_DURATION)
       {
         serial_writeln("INFO: BLOCK DEVICE ALERT affects this device, restricting usage");
         rdcp_blockdevice_lock(duration);

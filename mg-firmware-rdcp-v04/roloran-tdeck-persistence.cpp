@@ -3,6 +3,7 @@
 #include "roloran-tdeck-serial.h"
 #include "roloran-lora.h"
 #include "roloran-tdeck-persistence.h"
+#include "settings-scenario.h"
 
 #include <LittleFS.h>
 
@@ -39,8 +40,8 @@ void persist_serial_command_for_replay(String s)
   {
     File f = LittleFS.open(FILENAME_SERIAL_REPLAY, FILE_APPEND);
     if (!f) return;
-    char cline[256];
-    s.toCharArray(cline, 256);
+    char cline[DATABUFLEN];
+    s.toCharArray(cline, DATABUFLEN);
     f.printf("%s\n", cline);
     f.close();
   }
@@ -149,8 +150,8 @@ uint16_t get_next_rdcp_sequence_number(uint16_t origin)
   uint16_t seq = 1;
   if (hasFFat)
   {
-    char fn[256];
-    snprintf(fn, 256, "%s%04X", FILENAME_PREFIX_SEQNR, origin);
+    char fn[DATABUFLEN];
+    snprintf(fn, DATABUFLEN, "%s%04X", FILENAME_PREFIX_SEQNR, origin);
     File f = LittleFS.open(fn, FILE_READ);
     if (!f)
     {
@@ -174,14 +175,14 @@ uint16_t set_next_cire_nonce(uint16_t origin, uint16_t nonce)
 {
   if (hasFFat)
   {
-    char fn[256];
-    snprintf(fn, 256, "INFO: Persisting next-up CIRE Nonce %u for %04X", nonce, origin);
+    char fn[DATABUFLEN];
+    snprintf(fn, DATABUFLEN, "INFO: Persisting next-up CIRE Nonce %u for %04X", nonce, origin);
     serial_writeln(fn);
-    snprintf(fn, 256, "%s%04X", FILENAME_PREFIX_CIRENONCE, origin);
+    snprintf(fn, DATABUFLEN, "%s%04X", FILENAME_PREFIX_CIRENONCE, origin);
     File f = LittleFS.open(fn, FILE_WRITE);
     if (!f) return nonce;
-    char content[256];
-    snprintf(content, 256, "%" PRIu16 "\n", nonce);
+    char content[DATABUFLEN];
+    snprintf(content, DATABUFLEN, "%" PRIu16 "\n", nonce);
     f.print(content);
     f.close();
   }
@@ -193,8 +194,8 @@ uint16_t get_next_cire_nonce(uint16_t origin)
   uint16_t nonce = 1;
   if (hasFFat)
   {
-    char fn[256];
-    snprintf(fn, 256, "%s%04X", FILENAME_PREFIX_CIRENONCE, origin);
+    char fn[DATABUFLEN];
+    snprintf(fn, DATABUFLEN, "%s%04X", FILENAME_PREFIX_CIRENONCE, origin);
     File f = LittleFS.open(fn, FILE_READ);
     if (!f)
     {
@@ -218,14 +219,14 @@ uint16_t set_next_rdcp_sequence_number(uint16_t origin, uint16_t seq)
 {
   if (hasFFat)
   {
-    char fn[256];
-    snprintf(fn, 256, "INFO: Persisting next-up seqnr %u for %04X", seq, origin);
+    char fn[DATABUFLEN];
+    snprintf(fn, DATABUFLEN, "INFO: Persisting next-up seqnr %u for %04X", seq, origin);
     serial_writeln(fn);
-    snprintf(fn, 256, "%s%04X", FILENAME_PREFIX_SEQNR, origin);
+    snprintf(fn, DATABUFLEN, "%s%04X", FILENAME_PREFIX_SEQNR, origin);
     File f = LittleFS.open(fn, FILE_WRITE);
     if (!f) return seq;
-    char content[256];
-    snprintf(content, 256, "%" PRIu16 "\n", seq); // persist previous serial number so we match it on next use
+    char content[DATABUFLEN];
+    snprintf(content, DATABUFLEN, "%" PRIu16 "\n", seq); // persist previous serial number so we match it on next use
     f.print(content);
     f.close();
   }
@@ -237,8 +238,8 @@ bool persistence_checkset_nonce(char *name, uint16_t nonce)
   if (!hasFFat) return false;
   bool is_valid = false;
 
-  char filename[64];
-  snprintf(filename, 64, "%s.nce", name);
+  char filename[DATABUFLEN];
+  snprintf(filename, DATABUFLEN, "%s.nce", name);
 
   File f = LittleFS.open(filename, FILE_READ);
   if (!f)
@@ -261,8 +262,8 @@ bool persistence_checkset_nonce(char *name, uint16_t nonce)
     }
     else 
     {
-      char info[256];
-      snprintf(info, 256, "WARNING: Old nonce == %" PRIu16 ", new nonce == %" PRIu16, old_nonce, nonce);
+      char info[INFOLEN];
+      snprintf(info, INFOLEN, "WARNING: Old nonce == %" PRIu16 ", new nonce == %" PRIu16, old_nonce, nonce);
       serial_writeln(info);
     }
   }
@@ -276,8 +277,8 @@ bool persistence_checkset_nonce(char *name, uint16_t nonce)
       is_valid = false; // cannot persist nonce, don't trust it
     }
 
-    char content[256];
-    snprintf(content, 256, "%" PRIu16 "\n", nonce);
+    char content[DATABUFLEN];
+    snprintf(content, DATABUFLEN, "%" PRIu16 "\n", nonce);
     f.print(content);
     f.close();
   }
@@ -287,13 +288,13 @@ bool persistence_checkset_nonce(char *name, uint16_t nonce)
 
 uint8_t save_basecfg[4096];
 uint8_t save_replay[4096];
-uint8_t save_seqnr[256];
-uint8_t save_nonce[256];
+uint8_t save_seqnr[DATABUFLEN];
+uint8_t save_nonce[DATABUFLEN];
 
 void persistence_reformat_filesystem(void)
 {
   if (!hasFFat) return;
-  char fn[256];
+  char fn[DATABUFLEN];
   File f;
 
   bool has_device_settings = true;
@@ -305,7 +306,7 @@ void persistence_reformat_filesystem(void)
   int size_seqnr = 0;
   int size_nonce = 0;
 
-  snprintf(fn, 256, "%s", FILENAME_DEVICE_SETTINGS);
+  snprintf(fn, DATABUFLEN, "%s", FILENAME_DEVICE_SETTINGS);
   f = LittleFS.open(fn, FILE_READ);
   if (!f)
   {
@@ -317,7 +318,7 @@ void persistence_reformat_filesystem(void)
   }
   f.close();
 
-  snprintf(fn, 256, "%s", FILENAME_SERIAL_REPLAY);
+  snprintf(fn, DATABUFLEN, "%s", FILENAME_SERIAL_REPLAY);
   f = LittleFS.open(fn, FILE_READ);
   if (!f)
   {
@@ -329,7 +330,7 @@ void persistence_reformat_filesystem(void)
   }
   f.close();
 
-  snprintf(fn, 256, "%s%04X", FILENAME_PREFIX_SEQNR, getMyRDCPAddress());
+  snprintf(fn, DATABUFLEN, "%s%04X", FILENAME_PREFIX_SEQNR, getMyRDCPAddress());
   f = LittleFS.open(fn, FILE_READ);
   if (!f)
   {
@@ -337,11 +338,11 @@ void persistence_reformat_filesystem(void)
   }
   else 
   {
-    size_seqnr = f.read(save_seqnr, 256);
+    size_seqnr = f.read(save_seqnr, DATABUFLEN);
   }
   f.close();
 
-  snprintf(fn, 256, "%s%04X", FILENAME_PREFIX_CIRENONCE, getMyRDCPAddress());
+  snprintf(fn, DATABUFLEN, "%s%04X", FILENAME_PREFIX_CIRENONCE, getMyRDCPAddress());
   f = LittleFS.open(fn, FILE_READ);
   if (!f)
   {
@@ -349,7 +350,7 @@ void persistence_reformat_filesystem(void)
   }
   else 
   {
-    size_nonce = f.read(save_nonce, 256);
+    size_nonce = f.read(save_nonce, DATABUFLEN);
   }
   f.close();
 
@@ -360,7 +361,7 @@ void persistence_reformat_filesystem(void)
 
   if (has_device_settings)
   {
-    snprintf(fn, 256, "%s", FILENAME_DEVICE_SETTINGS);
+    snprintf(fn, DATABUFLEN, "%s", FILENAME_DEVICE_SETTINGS);
     f = LittleFS.open(fn, FILE_WRITE);
     if (f)
     {
@@ -372,7 +373,7 @@ void persistence_reformat_filesystem(void)
 
   if (has_serial_replay)
   {
-    snprintf(fn, 256, "%s", FILENAME_SERIAL_REPLAY);
+    snprintf(fn, DATABUFLEN, "%s", FILENAME_SERIAL_REPLAY);
     f = LittleFS.open(fn, FILE_WRITE);
     if (f)
     {
@@ -384,7 +385,7 @@ void persistence_reformat_filesystem(void)
 
   if (has_seqnr)
   {
-    snprintf(fn, 256, "%s%04X", FILENAME_PREFIX_SEQNR, getMyRDCPAddress());
+    snprintf(fn, DATABUFLEN, "%s%04X", FILENAME_PREFIX_SEQNR, getMyRDCPAddress());
     f = LittleFS.open(fn, FILE_WRITE);
     if (f)
     {
@@ -396,7 +397,7 @@ void persistence_reformat_filesystem(void)
 
   if (has_cirenonce)
   {
-    snprintf(fn, 256, "%s%04X", FILENAME_PREFIX_CIRENONCE, getMyRDCPAddress());
+    snprintf(fn, DATABUFLEN, "%s%04X", FILENAME_PREFIX_CIRENONCE, getMyRDCPAddress());
     f = LittleFS.open(fn, FILE_WRITE);
     if (f)
     {

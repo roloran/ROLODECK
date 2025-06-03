@@ -12,6 +12,7 @@
 #include "roloran-board.h"
 #include "roloran-audio.h"
 #include <BleSerial.h> 
+#include "settings-scenario.h"
 
 uint16_t LEN = 512;
 uint8_t  MY_SERIAL_MODE = SERIAL_MODE_SILENT;
@@ -155,8 +156,8 @@ String serial_readln(void)
   {
     if (SerialBT.available())
     {
-      char buf[512];
-      auto count = SerialBT.readBytes((uint8_t *) buf, 512);
+      char buf[BUFLEN];
+      auto count = SerialBT.readBytes((uint8_t *) buf, BUFLEN);
       if (count >= 1) return String(buf);
     }
   }
@@ -180,8 +181,8 @@ void serial_enable_bt(void)
   if (bt_enabled) return;
   bt_enabled = true;
 
-  char btdevicename[128];
-  snprintf(btdevicename, 128, "RDCP-MG-%04X", getMyRDCPAddress());
+  char btdevicename[BUFLEN];
+  snprintf(btdevicename, BUFLEN, "RDCP-MG-%04X", getMyRDCPAddress());
   SerialBT.begin(btdevicename);
   SerialBT.setTimeout(10);
 
@@ -237,28 +238,28 @@ void serial_process_command(String s, String processing_mode, bool persist_selec
     }
     else
     {
-      char status[256];
+      char status[DATABUFLEN];
       int64_t now = my_millis();
       int64_t cfdelta = rdcp_get_channel_free_estimation() - now;
       int txqe = get_num_txq_entries();
       int txaqe = get_num_txaq_entries();
       uint16_t roam = getRoamingRecommendation(1000*60*15);
       time_t wallclock = tdeck_get_time();
-      char timestamp[32];
+      char timestamp[MINIBUFLEN];
       struct tm ti;
-      snprintf(timestamp, 32, "n/a");
+      snprintf(timestamp, MINIBUFLEN, "n/a");
       if (wallclock)
       {
         if (localtime_r(&wallclock, &ti)) 
         {
-          snprintf(timestamp, 256, "%02d.%02d.%04d %02d:%02d", ti.tm_mday, ti.tm_mon, ti.tm_year + 1900, ti.tm_hour, ti.tm_min);
+          snprintf(timestamp, DATABUFLEN, "%02d.%02d.%04d %02d:%02d", ti.tm_mday, ti.tm_mon, ti.tm_year + 1900, ti.tm_hour, ti.tm_min);
         }
       }
       int cirestate = get_cire_state();
 
       rdcp_dump_queues();
 
-      snprintf(status, 256, "STATUS: T %" PRId64 " ms, rCF %" PRId64 " ms, Q %d/%d, R %04X, CPU %d MHz, clk %s, CIREstate %d", now, cfdelta, txqe, txaqe, roam, get_cpufreq(), timestamp, cirestate);
+      snprintf(status, DATABUFLEN, "STATUS: T %" PRId64 " ms, rCF %" PRId64 " ms, Q %d/%d, R %04X, CPU %d MHz, clk %s, CIREstate %d", now, cfdelta, txqe, txaqe, roam, get_cpufreq(), timestamp, cirestate);
       serial_writeln(status);
     }
   }
@@ -362,9 +363,9 @@ void serial_process_command(String s, String processing_mode, bool persist_selec
     }
     else if (s_uppercase.startsWith("LORASW "))
     {
-      char buffer[32];
+      char buffer[MINIBUFLEN];
       String p1 = s.substring(7);
-      p1.toCharArray(buffer, 32);
+      p1.toCharArray(buffer, MINIBUFLEN);
       uint8_t target_sws = strtol(buffer, NULL, 16);
       if ((target_sws != 0x12) && (target_sws != 0x34))
       {
@@ -373,7 +374,7 @@ void serial_process_command(String s, String processing_mode, bool persist_selec
       }
       setMyLoRaSyncWord(target_sws);
   	  radio_apply_new_configuration();
-      snprintf(buffer, 31, "%x\0", getMyLoRaSyncWord());
+      snprintf(buffer, MINIBUFLEN-1, "%x\0", getMyLoRaSyncWord());
 	    serial_writeln("INFO: Changed this device's LoRa syncword to 0x" + String(buffer));
       if (persist_selected_commands) persist_serial_command_for_replay(s);
     }
@@ -413,8 +414,8 @@ void serial_process_command(String s, String processing_mode, bool persist_selec
       p1.trim();
       p2.trim();
 
-      char buffer[32];
-      p1.toCharArray(buffer, 32);
+      char buffer[MINIBUFLEN];
+      p1.toCharArray(buffer, MINIBUFLEN);
       uint64_t delay = strtol(buffer, NULL, 10);
 
       rdcp_tx_interface(p2, delay, CHANNEL868);
@@ -458,8 +459,8 @@ void serial_process_command(String s, String processing_mode, bool persist_selec
     else if (s_uppercase.startsWith("RDCPADDR "))
     {
       String p1 = s.substring(9);
-      char buffer[32];
-      p1.toCharArray(buffer, 32);
+      char buffer[MINIBUFLEN];
+      p1.toCharArray(buffer, MINIBUFLEN);
       uint16_t new_rdcp_address = strtol(buffer, NULL, 16);
       setMyRDCPAddress(new_rdcp_address);
       serial_writeln("INFO: Changed this device's RDCP address to " + p1);
@@ -468,8 +469,8 @@ void serial_process_command(String s, String processing_mode, bool persist_selec
     else if (s_uppercase.startsWith("ENTRYPOINT "))
     {
       String p1 = s.substring(11);
-      char buffer[32];
-      p1.toCharArray(buffer, 32);
+      char buffer[MINIBUFLEN];
+      p1.toCharArray(buffer, MINIBUFLEN);
       uint16_t new_entrypoint_address = strtol(buffer, NULL, 16);
       addMyEntryPoint(new_entrypoint_address);
       serial_writeln("INFO: Added Entry Point " + p1);
@@ -478,8 +479,8 @@ void serial_process_command(String s, String processing_mode, bool persist_selec
     else if (s_uppercase.startsWith("MULTICAST "))
     {
       String p1 = s.substring(10);
-      char buffer[32];
-      p1.toCharArray(buffer, 32);
+      char buffer[MINIBUFLEN];
+      p1.toCharArray(buffer, MINIBUFLEN);
       uint16_t new_multicast_address = strtol(buffer, NULL, 16);
       addMyMulticastAddress(new_multicast_address);
       serial_writeln("INFO: Added Multicast Address " + p1);
@@ -488,8 +489,8 @@ void serial_process_command(String s, String processing_mode, bool persist_selec
     else if (s_uppercase.startsWith("SCREENSAVER "))
     {
       String p1 = s.substring(12);
-      char buffer[32];
-      p1.toCharArray(buffer, 32);
+      char buffer[MINIBUFLEN];
+      p1.toCharArray(buffer, MINIBUFLEN);
       uint16_t new_screensaver_delay = strtol(buffer, NULL, 10);
       setScreensaverDelay(new_screensaver_delay);
       serial_writeln("INFO: Changed screensaver delay to " + p1 + " ms");
@@ -498,28 +499,28 @@ void serial_process_command(String s, String processing_mode, bool persist_selec
     else if (s_uppercase.startsWith("HEARTBEAT "))
     {
       String p1 = s.substring(10);
-      char buffer[32];
-      p1.toCharArray(buffer, 32);
+      char buffer[MINIBUFLEN];
+      p1.toCharArray(buffer, MINIBUFLEN);
       uint16_t new_heartbeat_interval = strtol(buffer, NULL, 10);
-      set_heartbeat_interval((int64_t) new_heartbeat_interval * 1000 * 60);
+      set_heartbeat_interval((int64_t) new_heartbeat_interval * MINUTES_TO_MILLISECONDS);
       serial_writeln("INFO: Changed heartbeat interval to " + p1 + " minutes");
       if (persist_selected_commands) persist_serial_command_for_replay(s);
     }
     else if (s_uppercase.startsWith("GRACETIME "))
     {
       String p1 = s.substring(10);
-      char buffer[32];
-      p1.toCharArray(buffer, 32);
+      char buffer[MINIBUFLEN];
+      p1.toCharArray(buffer, MINIBUFLEN);
       uint16_t new_grace_period = strtol(buffer, NULL, 10);
-      set_grace_period((int64_t) new_grace_period * 1000);
+      set_grace_period((int64_t) new_grace_period * SECONDS_TO_MILLISECONDS);
       serial_writeln("INFO: Changed grace period to " + p1 + " seconds");
       if (persist_selected_commands) persist_serial_command_for_replay(s);
     }
     else if (s_uppercase.startsWith("CIRETIMEDA "))
     {
       String p1 = s.substring(11);
-      char buffer[32];
-      p1.toCharArray(buffer, 32);
+      char buffer[MINIBUFLEN];
+      p1.toCharArray(buffer, MINIBUFLEN);
       uint16_t new_ciretimeda = strtol(buffer, NULL, 10);
       set_ciretime_da(new_ciretimeda);
       serial_writeln("INFO: Changed CIRE ACK timeout for Entry Point to " + p1 + " seconds");
@@ -528,8 +529,8 @@ void serial_process_command(String s, String processing_mode, bool persist_selec
     else if (s_uppercase.startsWith("CIRETIMEHQ "))
     {
       String p1 = s.substring(11);
-      char buffer[32];
-      p1.toCharArray(buffer, 32);
+      char buffer[MINIBUFLEN];
+      p1.toCharArray(buffer, MINIBUFLEN);
       uint16_t new_ciretimehq = strtol(buffer, NULL, 10);
       set_ciretime_hq(new_ciretimehq);
       serial_writeln("INFO: Changed CIRE ACK timeout for HQ to " + p1 + " seconds");
@@ -538,16 +539,16 @@ void serial_process_command(String s, String processing_mode, bool persist_selec
     else if (s_uppercase.startsWith("UISCREEN "))
     {
       String p1 = s.substring(9);
-      char buffer[32];
-      p1.toCharArray(buffer, 32);
+      char buffer[MINIBUFLEN];
+      p1.toCharArray(buffer, MINIBUFLEN);
       uint16_t new_screen = strtol(buffer, NULL, 10);
       gui_transition_to_screen(new_screen);
     }
     else if (s_uppercase.startsWith("EULA "))
     {
       String p1 = s.substring(5);
-      char buffer[32];
-      p1.toCharArray(buffer, 32);
+      char buffer[MINIBUFLEN];
+      p1.toCharArray(buffer, MINIBUFLEN);
       uint16_t eula = strtol(buffer, NULL, 10);
       if (eula == 0)
       {
@@ -579,11 +580,11 @@ void serial_process_command(String s, String processing_mode, bool persist_selec
         simrx_buffer_length = decoded_length;
         for (int i=0; i != decoded_length; i++) simrx_buffer[i] = decoded_string[i];
 
-        char serialtext[255];
+        char serialtext[DATABUFLEN];
         simrx_timestamp = my_millis();
-        sprintf(serialtext, "RXMETA %d %d %d %.3f\0", simrx_buffer_length, 0, 100, getMyLoRaFrequency());
+        snprintf(serialtext, DATABUFLEN, "RXMETA %d %d %d %.3f\0", simrx_buffer_length, 0, 100, getMyLoRaFrequency());
         serial_writeln(serialtext);
-        sprintf(serialtext, "RX %s\0", buffer);
+        snprintf(serialtext, DATABUFLEN, "RX %s\0", buffer);
         serial_writeln(serialtext);
         new_simrx_available = true;
         set_current_rdcp_msg_base64(buffer);
@@ -596,8 +597,8 @@ void serial_process_command(String s, String processing_mode, bool persist_selec
     else if (s_uppercase.startsWith("RDCPPING "))
     {
       String p1 = s.substring(9);
-      char buffer[32];
-      p1.toCharArray(buffer, 32);
+      char buffer[MINIBUFLEN];
+      p1.toCharArray(buffer, MINIBUFLEN);
       uint16_t target = strtol(buffer, NULL, 16);
       rdcp_mg_send_echo_request(target);
     }
@@ -606,8 +607,8 @@ void serial_process_command(String s, String processing_mode, bool persist_selec
       String p1 = s.substring(9, 13);
       String p2 = s.substring(14);
 
-      char buffer[32];
-      p1.toCharArray(buffer, 32);
+      char buffer[MINIBUFLEN];
+      p1.toCharArray(buffer, MINIBUFLEN);
       uint16_t target = strtol(buffer, NULL, 16);
       rdcp_mg_send_test_message(target, p2);
     }
@@ -617,16 +618,16 @@ void serial_process_command(String s, String processing_mode, bool persist_selec
       String p2 = s.substring(12, 16); // Reference number
       String p3 = s.substring(17);     // Text
 
-      char b1[32], b2[32], b3[256];
-      p1.toCharArray(b1, 32);
-      p2.toCharArray(b2, 32);
-      p3.toCharArray(b3, 256);
+      char b1[MINIBUFLEN], b2[MINIBUFLEN], b3[DATABUFLEN];
+      p1.toCharArray(b1, MINIBUFLEN);
+      p2.toCharArray(b2, MINIBUFLEN);
+      p3.toCharArray(b3, DATABUFLEN);
 
       uint8_t subtype = (uint8_t) strtol(b1, NULL, 16);
       uint16_t refnum = (uint16_t) strtol(b2, NULL, 16);
 
-      char b[256];
-      snprintf(b, 256, "INFO: Preparing to send CITIZEN REPORT (subtype %d, refnr %d)", subtype, refnum);
+      char b[DATABUFLEN];
+      snprintf(b, DATABUFLEN, "INFO: Preparing to send CITIZEN REPORT (subtype %d, refnr %d)", subtype, refnum);
       serial_writeln(b);
       rdcp_send_cire(subtype, refnum, b3);
     }
@@ -634,40 +635,40 @@ void serial_process_command(String s, String processing_mode, bool persist_selec
     {
       String p1 = s.substring(6);
       setOwnerDisplayName(p1);
-      char oname[128];
-      p1.toCharArray(oname, 128);
-      char buffer[256];
-      snprintf(buffer, 256, "INFO: Device owner displayname set to %s", oname);
+      char oname[DATABUFLEN];
+      p1.toCharArray(oname, DATABUFLEN);
+      char buffer[DATABUFLEN];
+      snprintf(buffer, DATABUFLEN, "INFO: Device owner displayname set to %s", oname);
       serial_writeln(buffer);
       if (persist_selected_commands) persist_serial_command_for_replay(s);
     }
     else if (s_uppercase.startsWith("HQPUBKEY "))
     {
       String p1 = s.substring(9);
-      char buffer[256];
-      p1.toCharArray(buffer, 256);
+      char buffer[DATABUFLEN];
+      p1.toCharArray(buffer, DATABUFLEN);
       setHQpublicKey(buffer);
-      snprintf(buffer, 256, "INFO: HQ Public Key set");
+      snprintf(buffer, DATABUFLEN, "INFO: HQ Public Key set");
       serial_writeln(buffer);
       if (persist_selected_commands) persist_serial_command_for_replay(s);
     }
     else if (s_uppercase.startsWith("MYPUBKEY "))
     {
       String p1 = s.substring(9);
-      char buffer[256];
-      p1.toCharArray(buffer, 256);
+      char buffer[DATABUFLEN];
+      p1.toCharArray(buffer, DATABUFLEN);
       setMyPublicKey(buffer);
-      snprintf(buffer, 256, "INFO: Device Public Key set");
+      snprintf(buffer, DATABUFLEN, "INFO: Device Public Key set");
       serial_writeln(buffer);
       if (persist_selected_commands) persist_serial_command_for_replay(s);
     }
     else if (s_uppercase.startsWith("MYPRIVKEY "))
     {
       String p1 = s.substring(10);
-      char buffer[256];
-      p1.toCharArray(buffer, 256);
+      char buffer[DATABUFLEN];
+      p1.toCharArray(buffer, DATABUFLEN);
       setMyPrivateKey(buffer);
-      snprintf(buffer, 256, "INFO: Device Private Key set");
+      snprintf(buffer, DATABUFLEN, "INFO: Device Private Key set");
       serial_writeln(buffer);
       if (persist_selected_commands) persist_serial_command_for_replay(s);
     }
@@ -680,15 +681,15 @@ void serial_process_command(String s, String processing_mode, bool persist_selec
     else if (s_uppercase.startsWith("SHAREDSECRET "))
     {
       String p1 = s.substring(13);
-      uint8_t secret[32];
-      for (int i=0; i<32; i++) secret[i] = 0;
+      uint8_t secret[ASCIIKEYLEN];
+      for (int i=0; i<ASCIIKEYLEN; i++) secret[i] = 0;
 
-      char input[128];
-      p1.toCharArray(input, 128);
+      char input[DATABUFLEN];
+      p1.toCharArray(input, DATABUFLEN);
 
       char hexbyte[3];
       hexbyte[2] = 0;
-      for (int i=0; i<32; i++)
+      for (int i=0; i<ASCIIKEYLEN; i++)
       {
         hexbyte[0] = toupper(input[2*i]);
         hexbyte[1] = toupper(input[2*i+1]);
@@ -701,15 +702,15 @@ void serial_process_command(String s, String processing_mode, bool persist_selec
     else if (s_uppercase.startsWith("UNLOCKHASH1 "))
     {
       String p1 = s.substring(12);
-      uint8_t secret[32];
-      for (int i=0; i<32; i++) secret[i] = 0;
+      uint8_t secret[ASCIIKEYLEN];
+      for (int i=0; i<ASCIIKEYLEN; i++) secret[i] = 0;
 
-      char input[128];
-      p1.toCharArray(input, 128);
+      char input[DATABUFLEN];
+      p1.toCharArray(input, DATABUFLEN);
 
       char hexbyte[3];
       hexbyte[2] = 0;
-      for (int i=0; i<32; i++)
+      for (int i=0; i<ASCIIKEYLEN; i++)
       {
         hexbyte[0] = toupper(input[2*i]);
         hexbyte[1] = toupper(input[2*i+1]);
@@ -724,15 +725,15 @@ void serial_process_command(String s, String processing_mode, bool persist_selec
     else if (s_uppercase.startsWith("UNLOCKHASH2 "))
     {
       String p1 = s.substring(12);
-      uint8_t secret[32];
-      for (int i=0; i<32; i++) secret[i] = 0;
+      uint8_t secret[ASCIIKEYLEN];
+      for (int i=0; i<ASCIIKEYLEN; i++) secret[i] = 0;
 
-      char input[128];
-      p1.toCharArray(input, 128);
+      char input[DATABUFLEN];
+      p1.toCharArray(input, DATABUFLEN);
 
       char hexbyte[3];
       hexbyte[2] = 0;
-      for (int i=0; i<32; i++)
+      for (int i=0; i<ASCIIKEYLEN; i++)
       {
         hexbyte[0] = toupper(input[2*i]);
         hexbyte[1] = toupper(input[2*i+1]);
@@ -751,18 +752,18 @@ void serial_process_command(String s, String processing_mode, bool persist_selec
       String p3 = s.substring(19, 23); // seqnr
       String p4 = s.substring(24, 25); // acktype
 
-      char buffer[32];
-      p1.toCharArray(buffer, 32);
+      char buffer[MINIBUFLEN];
+      p1.toCharArray(buffer, MINIBUFLEN);
       uint16_t origin = strtol(buffer, NULL, 16);
-      p2.toCharArray(buffer, 32);
+      p2.toCharArray(buffer, MINIBUFLEN);
       uint16_t destination = strtol(buffer, NULL, 16);
-      p3.toCharArray(buffer, 32);
+      p3.toCharArray(buffer, MINIBUFLEN);
       uint16_t seqnr = strtol(buffer, NULL, 16);
-      p4.toCharArray(buffer, 32);
+      p4.toCharArray(buffer, MINIBUFLEN);
       uint8_t acktype = strtol(buffer, NULL, 16);
 
-      char b[256];
-      snprintf(b, 256, "INFO: Preparing to send a signed ACKNOWLEDGMENT from %s to %s for seqnr %s (type %s)", p1, p2, p3, p4);
+      char b[DATABUFLEN];
+      snprintf(b, DATABUFLEN, "INFO: Preparing to send a signed ACKNOWLEDGMENT from %s to %s for seqnr %s (type %s)", p1, p2, p3, p4);
       serial_writeln(b);
       rdcp_send_ack_signed(origin, destination, seqnr, acktype);
     }
@@ -773,18 +774,18 @@ void serial_process_command(String s, String processing_mode, bool persist_selec
       String p3 = s.substring(18, 22); // seqnr
       String p4 = s.substring(23, 24); // acktype
 
-      char buffer[32];
-      p1.toCharArray(buffer, 32);
+      char buffer[MINIBUFLEN];
+      p1.toCharArray(buffer, MINIBUFLEN);
       uint16_t origin = strtol(buffer, NULL, 16);
-      p2.toCharArray(buffer, 32);
+      p2.toCharArray(buffer, MINIBUFLEN);
       uint16_t destination = strtol(buffer, NULL, 16);
-      p3.toCharArray(buffer, 32);
+      p3.toCharArray(buffer, MINIBUFLEN);
       uint16_t seqnr = strtol(buffer, NULL, 16);
-      p4.toCharArray(buffer, 32);
+      p4.toCharArray(buffer, MINIBUFLEN);
       uint8_t acktype = strtol(buffer, NULL, 16);
 
-      char b[256];
-      snprintf(b, 256, "INFO: Preparing to send an unsigned ACKNOWLEDGMENT from %s to %s for seqnr %s (type %s)", p1, p2, p3, p4);
+      char b[DATABUFLEN];
+      snprintf(b, DATABUFLEN, "INFO: Preparing to send an unsigned ACKNOWLEDGMENT from %s to %s for seqnr %s (type %s)", p1, p2, p3, p4);
       serial_writeln(b);
       rdcp_send_ack_unsigned(origin, destination, seqnr, acktype);
     }
@@ -797,22 +798,22 @@ void serial_process_command(String s, String processing_mode, bool persist_selec
       String p5 = s.substring(21, 23); // minute
       String p6 = s.substring(24); // RDCP infrastructure status
 
-      char buffer[32];
-      p1.toCharArray(buffer, 32);
+      char buffer[MINIBUFLEN];
+      p1.toCharArray(buffer, MINIBUFLEN);
       uint8_t year = strtol(buffer, NULL, 10);
-      p2.toCharArray(buffer, 32);
+      p2.toCharArray(buffer, MINIBUFLEN);
       uint8_t month = strtol(buffer, NULL, 10);
-      p3.toCharArray(buffer, 32);
+      p3.toCharArray(buffer, MINIBUFLEN);
       uint8_t day = strtol(buffer, NULL, 10);
-      p4.toCharArray(buffer, 32);
+      p4.toCharArray(buffer, MINIBUFLEN);
       uint8_t hour = strtol(buffer, NULL, 10);
-      p5.toCharArray(buffer, 32);
+      p5.toCharArray(buffer, MINIBUFLEN);
       uint8_t minute = strtol(buffer, NULL, 10);
-      p6.toCharArray(buffer, 32);
+      p6.toCharArray(buffer, MINIBUFLEN);
       uint8_t status = strtol(buffer, NULL, 10);
 
-      char b[256];
-      snprintf(b, 256, "INFO: Preparing to send a signed TIMESTAMP from HQ to Broadcast");
+      char b[DATABUFLEN];
+      snprintf(b, DATABUFLEN, "INFO: Preparing to send a signed TIMESTAMP from HQ to Broadcast");
       serial_writeln(b);
       rdcp_send_timestamp(year, month, day, hour, minute, status);
     }
@@ -825,22 +826,22 @@ void serial_process_command(String s, String processing_mode, bool persist_selec
       String p5 = s.substring(20, 22); // minute
       String p6 = s.substring(23); // RDCP infrastructure status
 
-      char buffer[32];
-      p1.toCharArray(buffer, 32);
+      char buffer[MINIBUFLEN];
+      p1.toCharArray(buffer, MINIBUFLEN);
       uint8_t year = strtol(buffer, NULL, 10);
-      p2.toCharArray(buffer, 32);
+      p2.toCharArray(buffer, MINIBUFLEN);
       uint8_t month = strtol(buffer, NULL, 10);
-      p3.toCharArray(buffer, 32);
+      p3.toCharArray(buffer, MINIBUFLEN);
       uint8_t day = strtol(buffer, NULL, 10);
-      p4.toCharArray(buffer, 32);
+      p4.toCharArray(buffer, MINIBUFLEN);
       uint8_t hour = strtol(buffer, NULL, 10);
-      p5.toCharArray(buffer, 32);
+      p5.toCharArray(buffer, MINIBUFLEN);
       uint8_t minute = strtol(buffer, NULL, 10);
-      p6.toCharArray(buffer, 32);
+      p6.toCharArray(buffer, MINIBUFLEN);
       uint8_t status = strtol(buffer, NULL, 10);
 
-      char b[256];
-      snprintf(b, 256, "INFO: Setting this device's wallclock time");
+      char b[DATABUFLEN];
+      snprintf(b, DATABUFLEN, "INFO: Setting this device's wallclock time");
       serial_writeln(b);
       tdeck_set_time(2025 + year, month, day, hour, minute);
     }

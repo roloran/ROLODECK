@@ -171,7 +171,7 @@ void loop(void)
   rdcp_cire_check();      // Check for timeouts of sent CIRE messages, i.e., no ACKs received from DA or HQ
   rdcp_heartbeat_check(); // Check whether we should send a HEARTBEAT message
 
-  if ((minutetimer == -1) || (my_millis() > minutetimer + 5 * 60 * 1000)) // execute initially and roughly once every five minutes
+  if ((minutetimer == -1) || (my_millis() > minutetimer + 5 * SECONDS_TO_MILLISECONDS)) // execute initially and roughly once every five minutes
   {
     minutetimer = my_millis();
     if (is_screensaver_on()) mb_check_lifetime_and_update_display(true, true); // lifetime check blocks device for several seconds, only do it with screensaver on
@@ -183,8 +183,8 @@ void loop(void)
     min_free_heap = ESP.getMinFreeHeap();
     if ((free_heap < old_free_heap) || (min_free_heap < old_min_free_heap))
     {
-      char info[256];
-      snprintf(info, 256, "WARNING: Free heap dropped from %d/%d to %d/%d",
+      char info[INFOLEN];
+      snprintf(info, INFOLEN, "WARNING: Free heap dropped from %d/%d to %d/%d",
         old_min_free_heap, old_free_heap, min_free_heap, free_heap);
       serial_writeln(info);
       old_min_free_heap = min_free_heap;

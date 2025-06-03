@@ -1,6 +1,7 @@
 #include "roloran-crypto.h"
 #include "roloran-tdeck-serial.h"
 #include "settings-device.h"
+#include "settings-scenario.h"
 
 bool encrypt_aes256gcm(uint8_t *plaintext, size_t ptsize, uint8_t *adata, size_t adatasize, uint8_t *key, size_t keysize, uint8_t *iv, size_t ivsize, uint8_t *out_ciphertext, uint8_t *out_tag, size_t tagsize) 
 {
@@ -76,8 +77,8 @@ int schnorr_create_signature(uint8_t *data, uint8_t datalen, uint8_t *targetbuff
   int res = sss.init(&ssc, myprivkey);
   if (res != 0)
   {
-    char buf[512];
-    snprintf(buf, 512, "ERROR: schnorr_create_signature() could not initialize with private key %s", myprivkey);
+    char buf[INFOLEN];
+    snprintf(buf, INFOLEN, "ERROR: schnorr_create_signature() could not initialize with private key %s", myprivkey);
     serial_writeln(buf);
     return -1;
   }
@@ -120,17 +121,17 @@ bool schnorr_verify_signature(uint8_t *data, uint8_t datalen, uint8_t *signature
                                
   if (res != 0)
   {
-    char msg[256];
-    snprintf(msg, 256, "ERROR: schnorr_verify_signature() could not initialize (res %d) with HQ public key %s", res, getHQpublicKey());
+    char msg[INFOLEN];
+    snprintf(msg, INFOLEN, "ERROR: schnorr_verify_signature() could not initialize (res %d) with HQ public key %s", res, getHQpublicKey());
     serial_writeln(msg);
     return false;
   }
 
   struct SchnorrSigCtx::signature sig;
-  sig.point_len = 33;
-  for (int i=0; i<33; i++) sig.point[i] = signature[i];
-  sig.sig_len = 32;
-  for (int i=0; i<32; i++) sig.sig[i] = signature[i+33];
+  sig.point_len = SCHNORRPOINTLEN;
+  for (int i=0; i<SCHNORRPOINTLEN; i++) sig.point[i] = signature[i];
+  sig.sig_len = SCHNORRSIGLEN;
+  for (int i=0; i<SCHNORRSIGLEN; i++) sig.sig[i] = signature[i+SCHNORRPOINTLEN];
 
   res = ssv.verify((const unsigned char*)data, datalen, &sig);
   if (res == 0) return true;
