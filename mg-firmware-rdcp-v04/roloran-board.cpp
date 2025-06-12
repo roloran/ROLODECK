@@ -19,6 +19,8 @@
 #define FILENAME_HISTORY "/history.dat"
 #define FILENAME_HISTTMP "/history.new"
 #define MAX_SHOWN_ENTRIES 64
+#define CONTENT_RDCP_SIZE 270 
+#define CONTENT_TEXT_SIZE 512
 
 //< Data structure for a single history entry in the history file
 struct history_entry {
@@ -26,18 +28,18 @@ struct history_entry {
     bool display = false;             //< relevant for displaying on-screen (e.g., false for signatures)
     bool forall = false;              //< relevant for everyone (true) or only this device (false)
     bool crisis = true;               //< crisis vs. non-crisis message (separate GUI textareas)
+    bool signature_available = false; //< True if a signature for the message is available or message is locally generated
+    bool signature_verified = false;  //< True if the signature has been verified or message is locally generated
     uint16_t origin = RDCP_LOCAL_ORIGIN;       //< RDCP Origin of the message or 0 for locally created messages
     uint16_t seqnr = RDCP_NO_SEQUENCE_NUMBER;  //< RDCP Header SequenceNumber or number of multi-step local message
     uint16_t refnr = RDCP_NO_REFERENCE_NUMBER; //< ReferenceNumber as used, e.g., in OA and CIRE subheaders
+    int16_t lifetime = NO_DURATION;             //< lifetime setting for message (can have magic values according to RDCP specs)
     uint8_t morefragments = 0;        //< Number of subsequently following/expected fragments of the same message
-    char content_rdcp[384];           //< Base64-encoded RDCP message (LoRa packet payload) for received messages
-    char content_text[1024];          //< Textual content of the message (decrypted and de-unishox2'd for received messages)
+    char content_rdcp[CONTENT_RDCP_SIZE];      //< Base64-encoded RDCP message (LoRa packet payload) for received messages
+    char content_text[CONTENT_TEXT_SIZE];          //< Textual content of the message (decrypted and de-unishox2'd for received messages)
     uint8_t subtype = 0;              //< Subtype of the message, e.g., inquiry or crisis txt message
-    bool signature_available = false; //< True if a signature for the message is available or message is locally generated
-    char signature_verified = false;  //< True if the signature has been verified or message is locally generated
     int64_t timestamp_added = NO_TIMESTAMP;     //< my_millis() timestamp of when the message was added to the message board
     time_t timestamp_added_abs = NO_TIMESTAMP;  //< time_t of wallclock time of when message was added (if available)
-    int16_t lifetime = NO_DURATION;             //< lifetime setting for message (can have magic values according to RDCP specs)
     time_t expiry_absolute = NO_TIMESTAMP;      //< Wallclock expiration timestamp (if available)
     char footer[8];                   // must be "RDCP"; used to detect history file corruption, e.g. due to power-off during writing
 };
@@ -168,8 +170,8 @@ void mb_add_local_message(char *text, uint16_t refnr, uint16_t seqnr, uint16_t l
     cur_he.seqnr = seqnr;
     cur_he.refnr = refnr;
     cur_he.morefragments = 0;
-    snprintf(cur_he.content_text, 1024, "%s\0", text);
-    snprintf(cur_he.content_rdcp, 384, "\0");
+    snprintf(cur_he.content_text, CONTENT_TEXT_SIZE, "%s\0", text);
+    snprintf(cur_he.content_rdcp, CONTENT_RDCP_SIZE, "\0");
     cur_he.signature_available = false;
     cur_he.signature_verified = false;
     cur_he.timestamp_added = my_millis();
@@ -389,8 +391,8 @@ void mb_add_external_message(char *text, char *rdcpmsg, uint16_t origin, uint16_
     cur_he.seqnr = seqnr;
     cur_he.refnr = refnr;
     cur_he.morefragments = morefrags;
-    snprintf(cur_he.content_rdcp, 384, "%s\0", rdcpmsg);
-    snprintf(cur_he.content_text, 1024, "%s\0", text);
+    snprintf(cur_he.content_rdcp, CONTENT_RDCP_SIZE, "%s\0", rdcpmsg);
+    snprintf(cur_he.content_text, CONTENT_TEXT_SIZE, "%s\0", text);
     cur_he.signature_available = false;
     cur_he.signature_verified = false;
     cur_he.timestamp_added = my_millis();
@@ -767,7 +769,7 @@ void mb_add_signature(uint8_t *signature, uint16_t origin, uint16_t refnr)
     cur_he.morefragments = 0;
     for (int i=0; i<65; i++) cur_he.content_text[i] = signature[i];
     cur_he.content_text[65] = 0;
-    snprintf(cur_he.content_rdcp, 384, "%s", get_current_rdcp_msg_base64());
+    snprintf(cur_he.content_rdcp, CONTENT_RDCP_SIZE, "%s", get_current_rdcp_msg_base64());
     cur_he.signature_available = true;
     cur_he.signature_verified = false;
     cur_he.timestamp_added = my_millis();
