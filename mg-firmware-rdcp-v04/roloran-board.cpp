@@ -353,6 +353,8 @@ void mb_check_for_signature(uint16_t origin, uint16_t refnr)
                 return;
             }
 
+            bool drop_entry = false;
+
             if ((cur_he.origin == origin) && (cur_he.refnr == refnr) && (cur_he.display == RELEVANT_FOR_DISPLAYING) && (cur_he.signature_verified == false))
             {
                 cur_he.signature_available = true;
@@ -361,7 +363,14 @@ void mb_check_for_signature(uint16_t origin, uint16_t refnr)
                 serial_writeln(info);
             }
 
-            nf.write((uint8_t*)&cur_he, sizeof(history_entry));
+            if ((cur_he.origin == origin) && (cur_he.refnr == refnr) && (cur_he.display == NOT_RELEVANT_FOR_DISPLAYING))
+            {
+                drop_entry = true;
+                snprintf(info, INFOLEN, "INFO: Dropping Message Board history entry %d as signature has been verified", i);
+                serial_writeln(info);
+            }
+
+            if (!drop_entry) nf.write((uint8_t*)&cur_he, sizeof(history_entry));
 
             i += 1;
         }
@@ -434,6 +443,17 @@ void mb_add_external_message(char *text, char *rdcpmsg, uint16_t origin, uint16_
              (dupe_he.seqnr  == cur_he.seqnr)  &&
              (dupe_he.refnr  == cur_he.refnr)  &&
              (dupe_he.morefragments == cur_he.morefragments))
+             {
+              is_dupe = true;
+              break;
+             }
+
+        /* Treat as duplicate if it is a signature for an already verified message */
+        if ( (dupe_he.origin == cur_he.origin) &&
+             (dupe_he.refnr  == cur_he.refnr)  &&
+             (cur_he.display == NOT_RELEVANT_FOR_DISPLAYING) && 
+             (cur_he.local == GENERATED_EXTERNALLY) && 
+             (dupe_he.signature_verified == true))
              {
               is_dupe = true;
               break;
