@@ -2056,6 +2056,8 @@ void rdcp_heartbeat_check(void)
 {
   int64_t now = my_millis();
 
+  if (heartbeat_interval == 0) return; // sending heartbeats disabled
+
   if (now <= initial_grace_period) return;
 
   if (cire_state != CIRE_STATE_NONE)
