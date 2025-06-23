@@ -361,6 +361,13 @@ bool rdcp_mg_process_rxed_lora_packet(uint8_t *lora_packet, uint16_t lora_packet
             (rdcp_msg_in.header.sequence_number == most_recent_seqnr)
           )
         ) return false;
+      
+      /* Don't accept duplicate OAs/Signatures after longer uptime to improve device responsiveness */
+      if ((rdcp_msg_in.header.message_type == RDCP_MSGTYPE_OFFICIAL_ANNOUNCEMENT) || 
+          (rdcp_msg_in.header.message_type == RDCP_MSGTYPE_SIGNATURE))
+      {
+        if (my_millis() > 120 * MINUTES_TO_MILLISECONDS) return false;
+      }
     }
   }
 
