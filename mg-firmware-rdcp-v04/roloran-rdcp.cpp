@@ -562,7 +562,7 @@ void rdcp_mg_fill_outgoing_header(struct rdcp_message *rm)
   rm->header.sequence_number = get_next_rdcp_sequence_number(me);
 
   uint16_t primary_ep = getSuggestedRelay(0);
-  rm->header.relay1 = (uint8_t) ((primary_ep & 0x000F) * 8) + (uint8_t) 0x0;
+  rm->header.relay1 = (uint8_t) ((primary_ep & 0x000F) * 16) + (uint8_t) 0x0;
   rm->header.relay2 = RDCP_HEADER_RELAY_MAGIC_NONE;
   rm->header.relay3 = RDCP_HEADER_RELAY_MAGIC_NONE;
 
@@ -686,7 +686,7 @@ void rdcp_send_timestamp(uint8_t year, uint8_t month, uint8_t day, uint8_t hour,
   rm.header.rdcp_payload_length = RDCP_SIGNATURE_LENGTH + 6;
   rm.header.counter      = 0x00;
   uint16_t primary_ep = getSuggestedRelay(0); //getEntryPoint(0);
-  rm.header.relay1       = (uint8_t) ((primary_ep & 0x000F) * 8) + (uint8_t) 0x0;
+  rm.header.relay1       = (uint8_t) ((primary_ep & 0x000F) * 16) + (uint8_t) 0x0;
   rm.header.relay2       = RDCP_HEADER_RELAY_MAGIC_NONE;
   rm.header.relay3       = RDCP_HEADER_RELAY_MAGIC_NONE;
 
@@ -1770,7 +1770,7 @@ void rdcp_send_ack_signed(uint16_t origin, uint16_t destination, uint16_t seqnr,
   rm.header.counter = 2;
   rm.header.sequence_number = get_next_rdcp_sequence_number(origin);
   uint16_t primary_ep = getSuggestedRelay(0); //getEntryPoint(0);
-  rm.header.relay1 = (uint8_t) ((primary_ep & 0x000F) * 8) + (uint8_t) 0x0;
+  rm.header.relay1 = (uint8_t) ((primary_ep & 0x000F) * 16) + (uint8_t) 0x0;
   if ((origin >= RDCP_ADDRESS_BBKDA_LOWERBOUND) && (origin < RDCP_ADDRESS_MG_LOWERBOUND)) rm.header.relay1 = RDCP_HEADER_RELAY_MAGIC_NONE; // don't use an Entry Point when spoofing a DA
   rm.header.relay2 = RDCP_HEADER_RELAY_MAGIC_NONE;
   rm.header.relay3 = RDCP_HEADER_RELAY_MAGIC_NONE;
@@ -1840,7 +1840,7 @@ void rdcp_send_ack_unsigned(uint16_t origin, uint16_t destination, uint16_t seqn
   rm.header.counter = 2;
   rm.header.sequence_number = get_next_rdcp_sequence_number(origin);
   uint16_t primary_ep = getSuggestedRelay(0); //getEntryPoint(0);
-  rm.header.relay1 = (uint8_t) ((primary_ep & 0x000F) * 8) + (uint8_t) 0x0;
+  rm.header.relay1 = (uint8_t) ((primary_ep & 0x000F) * 16) + (uint8_t) 0x0;
   if ((origin >= RDCP_ADDRESS_BBKDA_LOWERBOUND) && (origin < RDCP_ADDRESS_MG_LOWERBOUND)) rm.header.relay1 = RDCP_HEADER_RELAY_MAGIC_NONE; // don't use an Entry Point when spoofing a DA
   rm.header.relay2 = RDCP_HEADER_RELAY_MAGIC_NONE;
   rm.header.relay3 = RDCP_HEADER_RELAY_MAGIC_NONE;
@@ -1927,7 +1927,7 @@ void rdcp_send_cire(uint8_t subtype, uint16_t refnr, char *text)
 
   uint16_t primary_ep = getSuggestedRelay(cire_retry); //getEntryPoint(cire_retry);
   cire_current_ep = primary_ep;
-  rm.header.relay1 = (uint8_t) ((primary_ep & 0x000F) * 8) + (uint8_t) 0x0;
+  rm.header.relay1 = (uint8_t) ((primary_ep & 0x000F) * 16) + (uint8_t) 0x0;
   rm.header.relay2 = RDCP_HEADER_RELAY_MAGIC_NONE;
   rm.header.relay3 = RDCP_HEADER_RELAY_MAGIC_NONE;
 
