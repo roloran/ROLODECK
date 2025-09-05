@@ -41,6 +41,11 @@ uint8_t gui_get_current_screen(void);
 void gui_crisis_add_text(char *s);
 
 /**
+ * @param s Text to add to the RESP screen
+ */
+void gui_resp_add_text(char *s);
+
+/**
  * @param s Text to add to the non-crisis OA screen 
  */
 void gui_noncrisis_add_text(char *s);

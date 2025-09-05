@@ -2168,7 +2168,8 @@ void rdcp_mg_process_incoming_private_oa(void)
       mb_add_external_message(oa, get_current_rdcp_msg_base64(), rdcp_msg_in.header.origin, rdcp_msg_in.header.sequence_number,
        refnr, morefragments, lifetime, RELEVANT_FOR_DISPLAYING, RELEVANCE_FOR_THIS_DEVICE_ONLY, true, true, subtype);
 
-      lv_textarea_set_text(ui_TextAreaRESPoa, oa);
+      // lv_textarea_set_text(ui_TextAreaRESPoa, oa);
+      gui_resp_add_text(oa);
       lv_textarea_set_text(ui_TextAreaRESPFreetext, "");
 
       gui_switch_red_button_mode(RED_BUTTON_MODE_INQUIRY);

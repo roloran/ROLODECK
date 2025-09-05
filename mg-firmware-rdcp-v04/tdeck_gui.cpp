@@ -248,6 +248,24 @@ void gui_callback_resp_submit(lv_event_t *e)
   return;
 }
 
+void gui_callback_resp_abort(lv_event_t *e)
+{
+  lv_event_code_t event_code = lv_event_get_code(e);
+  lv_obj_t *target = lv_event_get_target(e);
+
+  int64_t now = my_millis();
+  if (now - last_button_press < 2000) return;
+  last_button_press = now;
+
+  if (event_code == LV_EVENT_CLICKED)
+  {
+    gui_transition_to_screen(SCREEN_OACRISIS);
+    set_gui_needs_screen_refresh(true);
+  }
+
+  return;
+}
+
 uint8_t red_button_mode = RED_BUTTON_MODE_EMERGENCY;
 
 void gui_switch_red_button_mode(uint8_t new_mode)
@@ -425,6 +443,20 @@ void gui_noncrisis_add_text(char *s)
   lv_textarea_add_text(ui_TextAreaOANonCrisis, "\n"); // along with a linebreak
   lv_textarea_set_accepted_chars(ui_TextAreaOANonCrisis, "*");
   set_gui_needs_screen_refresh(true);
+  return;
+}
+
+void gui_resp_add_text(char *s)
+{
+  screensaver_off();
+  lv_textarea_set_accepted_chars(ui_TextAreaRESPoa, NULL);
+  lv_textarea_set_max_length(ui_TextAreaRESPoa, 0);
+  lv_textarea_set_text(ui_TextAreaRESPoa, "");
+  lv_textarea_set_cursor_pos(ui_TextAreaRESPoa, LV_TEXTAREA_CURSOR_LAST); // append new text at the end
+  lv_textarea_add_text(ui_TextAreaRESPoa, s); // add the message itself
+  lv_textarea_set_accepted_chars(ui_TextAreaRESPoa, "*");
+  set_gui_needs_screen_refresh(true);
+
   return;
 }
 
@@ -659,6 +691,7 @@ void gui_callback_setup(void)
 
   // RESP Screen Buttons
   lv_obj_add_event_cb(ui_ButtonRESPsubmit, gui_callback_resp_submit, LV_EVENT_CLICKED, NULL);
+  lv_obj_add_event_cb(ui_ButtonRESPabort, gui_callback_resp_abort, LV_EVENT_CLICKED, NULL);
 
   // Disable entering text into OA text areas
   lv_textarea_set_accepted_chars(ui_TextAreaOACrisis, "*");
