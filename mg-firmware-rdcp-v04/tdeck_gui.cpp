@@ -725,6 +725,9 @@ void gui_callback_setup(void)
   lv_obj_set_style_anim_time(ui_TextAreaOANonCrisis, 0, LV_STATE_USER_1 | LV_PART_CURSOR);
   lv_obj_set_style_border_width(ui_TextAreaOANonCrisis, 0, LV_STATE_USER_1 | LV_PART_CURSOR);
   lv_obj_add_state(ui_TextAreaOANonCrisis, LV_STATE_FOCUSED | LV_STATE_USER_1);
+  lv_obj_set_style_anim_time(ui_TextAreaRESPoa, 0, LV_STATE_USER_1 | LV_PART_CURSOR);
+  lv_obj_set_style_border_width(ui_TextAreaRESPoa, 0, LV_STATE_USER_1 | LV_PART_CURSOR);
+  lv_obj_add_state(ui_TextAreaRESPoa, LV_STATE_FOCUSED | LV_STATE_USER_1);
 
   return;
 }
