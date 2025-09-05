@@ -384,7 +384,7 @@ bool rdcp_mg_process_rxed_lora_packet(uint8_t *lora_packet, uint16_t lora_packet
   /* Repeat the RDCP Message if the device is configured accordingly. */
   if (!is_duplicate) rdcp_repeater();
 
-  rdcp_mg_process_incoming_message();
+  rdcp_mg_process_incoming_message(is_duplicate);
 
   return true;
 }
@@ -829,7 +829,7 @@ void rdcp_mg_process_incoming_ack(void)
   return;
 }
 
-void rdcp_mg_process_incoming_message(void)
+void rdcp_mg_process_incoming_message(bool is_duplicate)
 {
   /* Handle rdcp_msg_in depending on its RDCP Message Type and Destination. */
   /* It is known to be a valid (correct checksum), new (non-duplicate) RDCP Message. */
@@ -850,7 +850,7 @@ void rdcp_mg_process_incoming_message(void)
   {
     if (dest == me)
     {
-      rdcp_mg_process_incoming_private_oa();
+      rdcp_mg_process_incoming_private_oa(is_duplicate);
     }
     else
     {
@@ -2094,7 +2094,7 @@ void rdcp_heartbeat_check(void)
   return;
 }
 
-void rdcp_mg_process_incoming_private_oa(void)
+void rdcp_mg_process_incoming_private_oa(bool is_duplicate)
 {
   /* Official Announcements sent to a single device are symetrically encrypted. */
   uint8_t ciphertext[DATABUFLEN];
@@ -2103,6 +2103,7 @@ void rdcp_mg_process_incoming_private_oa(void)
   uint8_t gcmauthtag[AESTAGSIZE];
   uint8_t additional_data[8];
   uint8_t additional_data_size = 8;
+  bool    added; // message added to message board?
 
   memset(iv, 0, sizeof(iv));
   iv[0] = rdcp_msg_in.header.origin % 256;
@@ -2147,34 +2148,37 @@ void rdcp_mg_process_incoming_private_oa(void)
 
     if (subtype == RDCP_MSGTYPE_OA_SUBTYPE_CRISIS_TXT)
     {
-      mb_add_external_message(oa, get_current_rdcp_msg_base64(), rdcp_msg_in.header.origin, rdcp_msg_in.header.sequence_number,
+      added = mb_add_external_message(oa, get_current_rdcp_msg_base64(), rdcp_msg_in.header.origin, rdcp_msg_in.header.sequence_number,
        refnr, morefragments, lifetime, RELEVANT_FOR_DISPLAYING, RELEVANCE_FOR_THIS_DEVICE_ONLY, true, true, subtype);
-      if (gui_get_current_screen() == SCREEN_OANONCRISIS) gui_transition_to_screen(SCREEN_OACRISIS);
+      if (added && (gui_get_current_screen() == SCREEN_OANONCRISIS)) gui_transition_to_screen(SCREEN_OACRISIS);
     }
     else if (subtype == RDCP_MSGTYPE_OA_SUBTYPE_NONCRISIS)
     {
-      mb_add_external_message(oa, get_current_rdcp_msg_base64(), rdcp_msg_in.header.origin, rdcp_msg_in.header.sequence_number,
+      added = mb_add_external_message(oa, get_current_rdcp_msg_base64(), rdcp_msg_in.header.origin, rdcp_msg_in.header.sequence_number,
        refnr, morefragments, lifetime, RELEVANT_FOR_DISPLAYING, RELEVANCE_FOR_THIS_DEVICE_ONLY, false, true, subtype);
-      if (gui_get_current_screen() != SCREEN_OANONCRISIS) gui_transition_to_screen(SCREEN_OANONCRISIS);
+      if (added && (gui_get_current_screen() != SCREEN_OANONCRISIS)) gui_transition_to_screen(SCREEN_OANONCRISIS);
     }
     else if (subtype == RDCP_MSGTYPE_OA_SUBTYPE_FEEDBACK)
     {
-      mb_add_external_message(oa, get_current_rdcp_msg_base64(), rdcp_msg_in.header.origin, rdcp_msg_in.header.sequence_number,
+      added = mb_add_external_message(oa, get_current_rdcp_msg_base64(), rdcp_msg_in.header.origin, rdcp_msg_in.header.sequence_number,
        refnr, morefragments, lifetime, RELEVANT_FOR_DISPLAYING, RELEVANCE_FOR_THIS_DEVICE_ONLY, true, true, subtype);
-      if (gui_get_current_screen() == SCREEN_OANONCRISIS) gui_transition_to_screen(SCREEN_OACRISIS);
+      if (added && (gui_get_current_screen() == SCREEN_OANONCRISIS)) gui_transition_to_screen(SCREEN_OACRISIS);
     }
     else if (subtype == RDCP_MSGTYPE_OA_SUBTYPE_INQUIRY)
     {
-      mb_add_external_message(oa, get_current_rdcp_msg_base64(), rdcp_msg_in.header.origin, rdcp_msg_in.header.sequence_number,
+      added = mb_add_external_message(oa, get_current_rdcp_msg_base64(), rdcp_msg_in.header.origin, rdcp_msg_in.header.sequence_number,
        refnr, morefragments, lifetime, RELEVANT_FOR_DISPLAYING, RELEVANCE_FOR_THIS_DEVICE_ONLY, true, true, subtype);
 
-      // lv_textarea_set_text(ui_TextAreaRESPoa, oa);
-      gui_resp_add_text(oa);
-      lv_textarea_set_text(ui_TextAreaRESPFreetext, "");
+      if (!is_duplicate && added)
+      {
+        // lv_textarea_set_text(ui_TextAreaRESPoa, oa);
+        gui_resp_add_text(oa);
+        lv_textarea_set_text(ui_TextAreaRESPFreetext, "");
 
-      gui_switch_red_button_mode(RED_BUTTON_MODE_INQUIRY);
-      set_current_inquiry_refnr(refnr);
-      if (gui_get_current_screen() == SCREEN_OANONCRISIS) gui_transition_to_screen(SCREEN_OACRISIS);
+        gui_switch_red_button_mode(RED_BUTTON_MODE_INQUIRY);
+        set_current_inquiry_refnr(refnr);
+        if (gui_get_current_screen() == SCREEN_OANONCRISIS) gui_transition_to_screen(SCREEN_OACRISIS);
+      }
     }
   }
   else
@@ -2204,6 +2208,7 @@ void rdcp_mg_process_incoming_public_oa(void)
   uint16_t lifetime = rdcp_msg_in.payload.data[3] + 256 * rdcp_msg_in.payload.data[4];
   uint8_t morefragments = rdcp_msg_in.payload.data[5];
   uint8_t uuContent[DATABUFLEN];
+  bool added;
 
   if (subtype != RDCP_MSGTYPE_OA_SUBTYPE_UPDATE)
   {
@@ -2221,15 +2226,15 @@ void rdcp_mg_process_incoming_public_oa(void)
 
     if (subtype == RDCP_MSGTYPE_OA_SUBTYPE_CRISIS_TXT)
     {
-      mb_add_external_message(oa, get_current_rdcp_msg_base64(), rdcp_msg_in.header.origin, rdcp_msg_in.header.sequence_number,
+      added = mb_add_external_message(oa, get_current_rdcp_msg_base64(), rdcp_msg_in.header.origin, rdcp_msg_in.header.sequence_number,
        refnr, morefragments, lifetime, RELEVANT_FOR_DISPLAYING, RELEVANCE_FOR_EVERYONE, true, false, subtype);
-      if (gui_get_current_screen() == SCREEN_OANONCRISIS) gui_transition_to_screen(SCREEN_OACRISIS);
+      if (added && (gui_get_current_screen() == SCREEN_OANONCRISIS)) gui_transition_to_screen(SCREEN_OACRISIS);
     }
     else if (subtype == RDCP_MSGTYPE_OA_SUBTYPE_NONCRISIS)
     {
-      mb_add_external_message(oa, get_current_rdcp_msg_base64(), rdcp_msg_in.header.origin, rdcp_msg_in.header.sequence_number,
+      added = mb_add_external_message(oa, get_current_rdcp_msg_base64(), rdcp_msg_in.header.origin, rdcp_msg_in.header.sequence_number,
        refnr, morefragments, lifetime, RELEVANT_FOR_DISPLAYING, RELEVANCE_FOR_EVERYONE, false, false, subtype);
-      if (gui_get_current_screen() != SCREEN_OANONCRISIS) gui_transition_to_screen(SCREEN_OANONCRISIS);
+      if (added && (gui_get_current_screen() != SCREEN_OANONCRISIS)) gui_transition_to_screen(SCREEN_OANONCRISIS);
     }
     else if (subtype == RDCP_MSGTYPE_OA_SUBTYPE_INQUIRY)
     {
@@ -2237,15 +2242,18 @@ void rdcp_mg_process_incoming_public_oa(void)
           INQUIRY messages should only be sent to a single device and thus not be handled here.
           However, this might become relevant for later use-cases.
       */
-      mb_add_external_message(oa, get_current_rdcp_msg_base64(), rdcp_msg_in.header.origin, rdcp_msg_in.header.sequence_number,
+      added = mb_add_external_message(oa, get_current_rdcp_msg_base64(), rdcp_msg_in.header.origin, rdcp_msg_in.header.sequence_number,
        refnr, morefragments, lifetime, RELEVANT_FOR_DISPLAYING, RELEVANCE_FOR_EVERYONE, true, false, subtype);
 
-      lv_textarea_set_text(ui_TextAreaRESPoa, oa);
-      lv_textarea_set_text(ui_TextAreaRESPFreetext, "");
+      if (added)
+      {
+        lv_textarea_set_text(ui_TextAreaRESPoa, oa);
+        lv_textarea_set_text(ui_TextAreaRESPFreetext, "");
 
-      gui_switch_red_button_mode(RED_BUTTON_MODE_INQUIRY);
-      set_current_inquiry_refnr(refnr);
-      if (gui_get_current_screen() == SCREEN_OANONCRISIS) gui_transition_to_screen(SCREEN_OACRISIS);
+        gui_switch_red_button_mode(RED_BUTTON_MODE_INQUIRY);
+        set_current_inquiry_refnr(refnr);
+        if (gui_get_current_screen() == SCREEN_OANONCRISIS) gui_transition_to_screen(SCREEN_OACRISIS);
+      }
     }
   }
   else

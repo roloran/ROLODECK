@@ -24,7 +24,6 @@ void mb_clear_history(void);
  * @param seqnr A sequence number, e.g., as used in the RDCP Header 
  * @param lifetime 16-bit lifetime specification as used in OAs 
  * @param crisis true if crisis-mode text, false if non-crisis mode text
- * @return void 
  */
 void mb_add_local_message(char *text, uint16_t refnr, uint16_t seqnr, uint16_t lifetime, bool crisis);
 
@@ -49,9 +48,9 @@ void mb_add_local_message(char *text, uint16_t refnr, uint16_t seqnr, uint16_t l
  * @param crisis true if crisis-mode text, false if non-crisis mode text
  * @param signedprivate true if the RDCP Message is an OA to a unicast address and thus AES-GCM-encrypted/authenticated
  * @param subtype RDCP Message Type "Official Announcement" Subtype (e.g., crisis text, inquiry, ...)
-> * @return void
+ * @return true if message was added to message board, false if it was not (e.g., already known)
  */
-void mb_add_external_message(char *text, char *rdcpmsg, uint16_t origin, uint16_t seqnr, 
+bool mb_add_external_message(char *text, char *rdcpmsg, uint16_t origin, uint16_t seqnr, 
     uint16_t refnr, uint8_t morefrags, uint16_t lifetime, bool displayrelevance, 
     bool deviceonlyrelevance, bool crisis, bool signedprivate, uint8_t subtype);
 

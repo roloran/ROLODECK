@@ -386,9 +386,9 @@ void mb_check_for_signature(uint16_t origin, uint16_t refnr)
     return;
 }
 
-void mb_add_external_message(char *text, char *rdcpmsg, uint16_t origin, uint16_t seqnr, uint16_t refnr, uint8_t morefrags, uint16_t lifetime, bool displayrelevance, bool deviceonlyrelevance, bool crisis, bool signedprivate, uint8_t subtype)
+bool mb_add_external_message(char *text, char *rdcpmsg, uint16_t origin, uint16_t seqnr, uint16_t refnr, uint8_t morefrags, uint16_t lifetime, bool displayrelevance, bool deviceonlyrelevance, bool crisis, bool signedprivate, uint8_t subtype)
 {
-    if (!hasStorage) return;
+    if (!hasStorage) return false;
 
     if (refnr > highest_oa_refnr) highest_oa_refnr = refnr;
 
@@ -460,10 +460,10 @@ void mb_add_external_message(char *text, char *rdcpmsg, uint16_t origin, uint16_
              }
     }
     histfile.close();
-    if (is_dupe) return; // already added and processed, do nothing
+    if (is_dupe) return false; // already added and processed, do nothing
 
     histfile = LittleFS.open(FILENAME_HISTORY, FILE_APPEND);
-    if (!histfile) return;
+    if (!histfile) return false;
     histfile.write((uint8_t*) &cur_he, sizeof(history_entry));
     histfile.close();
 
@@ -475,7 +475,7 @@ void mb_add_external_message(char *text, char *rdcpmsg, uint16_t origin, uint16_
         audio_play_melody();
     }
 
-    return;
+    return true;
 }
 
 #define CHUNKSIZE 1024

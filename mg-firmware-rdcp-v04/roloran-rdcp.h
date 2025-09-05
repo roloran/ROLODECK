@@ -195,8 +195,9 @@ void rdcp_update_channel_free_estimator_rx(void);
   * Actually a subset of rdcp_mg_process_rxed_lora_packet(...), which handles previous steps such as
   * checksum verification and duplicate elimination and then calls this function.
   * Used internally.
+  * @param is_duplicate true if message is a duplicate based on Origin and SequenceNumber, false otherwise
   */
-void rdcp_mg_process_incoming_message(void);
+void rdcp_mg_process_incoming_message(bool is_duplicate);
 
 /**
   * Returns the current timestamp value of CFEst (Channel Free Estimator).
@@ -538,8 +539,9 @@ void set_ciretime_hq(uint16_t timeout);
 
 /**
  * Process an incoming private official announcement (sent to this device only). Used internally.
+ * @param is_duplicate true if message is a duplicate based on Origin and SequenceNumber, false otherwise
  */
-void rdcp_mg_process_incoming_private_oa(void);
+void rdcp_mg_process_incoming_private_oa(bool is_duplicate);
 
 /**
  * Process an incoming public official announcement. Used internally.
