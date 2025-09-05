@@ -1045,23 +1045,35 @@ void mb_count_and_show_last(bool forced_mode, bool crisis)
     }
     else
     {
-        if ((msg_crisis_last > msg_noncrisis_last) || (forced_mode && crisis))
+        if (forced_mode) // forced mode
         {
-            mb_load_entry(msg_crisis_last);
-            cur_he.crisis = true;
-            msg_crisis_current = msg_crisis_total;
+            if (crisis)
+            { // forced crisis
+                mb_load_entry(msg_crisis_last);
+                cur_he.crisis = true;
+                msg_crisis_current = msg_crisis_total;
+            }
+            else // forced non-crisis
+            {
+                mb_load_entry(msg_noncrisis_last);
+                cur_he.crisis = false;
+                msg_noncrisis_current = msg_noncrisis_total;
+            }
         }
-        else if ((msg_crisis_last > msg_noncrisis_last) && forced_mode && !crisis)
+        else // non-forced mode
         {
-            mb_load_entry(msg_noncrisis_last);
-            cur_he.crisis = false;
-            msg_noncrisis_current = msg_noncrisis_total;
-        }
-        else
-        {
-            mb_load_entry(msg_noncrisis_last);
-            cur_he.crisis = false;
-            msg_noncrisis_current = msg_noncrisis_total;
+            if (msg_crisis_last > msg_noncrisis_last) // most recent OA is crisis
+            {
+                mb_load_entry(msg_crisis_last);
+                cur_he.crisis = true;
+                msg_crisis_current = msg_crisis_total;
+            }
+            else // most recent OA is non-crisis 
+            {
+                mb_load_entry(msg_noncrisis_last);
+                cur_he.crisis = false;
+                msg_noncrisis_current = msg_noncrisis_total;
+            }
         }
     }
     mb_show_current(-1);
@@ -1108,7 +1120,12 @@ void mb_count(void)
             msg_crisis_last = curpos;
             if ((cur_he.local == GENERATED_EXTERNALLY) && (cur_he.refnr > highest_oa_refnr)) highest_oa_refnr = cur_he.refnr;
         }
-        if (!cur_he.crisis) { msg_noncrisis_total += 1; msg_noncrisis_last = curpos; }
+        if (!cur_he.crisis) 
+        { 
+            msg_noncrisis_total += 1; 
+            msg_noncrisis_last = curpos; 
+            if ((cur_he.local == GENERATED_EXTERNALLY) && (cur_he.refnr > highest_oa_refnr)) highest_oa_refnr = cur_he.refnr;
+        }
     }
     histfile.close();
 
