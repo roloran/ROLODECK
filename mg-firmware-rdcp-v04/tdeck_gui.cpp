@@ -319,7 +319,7 @@ void gui_callback_blue_button_pressed(lv_event_t *e)
 
   if (event_code == LV_EVENT_CLICKED)
   {
-    gui_transition_to_screen(SCREEN_CIRE);
+    if (red_button_mode == RED_BUTTON_MODE_EMERGENCY) gui_transition_to_screen(SCREEN_CIRE);
   }
   return;
 }
