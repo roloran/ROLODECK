@@ -878,6 +878,7 @@ bool mb_check_lifetime(void)
         if (he.lifetime == NO_DURATION)
         {
             nf.write((uint8_t*)&he, sizeof(history_entry));
+            if ((he.local == GENERATED_EXTERNALLY) && (he.refnr > highest_oa_refnr)) highest_oa_refnr = he.refnr;
             continue; // 0 is magic value for infinite lifetime
         }
 
