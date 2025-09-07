@@ -916,6 +916,23 @@ void serial_process_command(String s, String processing_mode, bool persist_selec
       }
       if (persist_selected_commands) persist_serial_command_for_replay(s);
     }
+    else if (s_uppercase.startsWith("DISPLAYNAME "))
+    {
+      String p1 = s.substring(12);
+      setOwnerDisplayName(p1);
+      char oname[DATABUFLEN];
+      p1.toCharArray(oname, DATABUFLEN);
+      char buffer[DATABUFLEN];
+      snprintf(buffer, DATABUFLEN, "INFO: Device owner displayname set to %s\n", oname);
+      Serial.print(buffer);
+      if (persist_selected_commands) persist_serial_command_for_replay(s);
+    }
+    else if (s_uppercase.startsWith("IDENTIFICATION"))
+    {
+      char output[DATABUFLEN];
+      snprintf(output, DATABUFLEN, "RDCP Address: %04X\n", getMyRDCPAddress());
+      Serial.print(output);
+    }
     else
     {
       if (MY_SERIAL_MODE != SERIAL_MODE_FULLACCESS) Serial.println("Device usage restricted.");
