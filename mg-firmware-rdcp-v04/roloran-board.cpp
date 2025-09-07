@@ -59,6 +59,8 @@ int msg_noncrisis_total = 0;
 int msg_noncrisis_last = 0;
 extern uint16_t highest_oa_refnr;
 
+extern bool infrastructure_in_crisis;
+
 void tdeck_set_time(int year, int month, int day, int hour, int minute)
 {
     hqts.year = year;
@@ -155,6 +157,7 @@ void mb_clear_history(void)
     serial_writeln("INFO: Clearing Message Board persistent history file");
     LittleFS.remove(FILENAME_HISTORY);
     mb_zap_counters();
+    mb_count_and_show_last(true, infrastructure_in_crisis);
     return;
 }
 
@@ -793,7 +796,7 @@ void mb_add_signature(uint8_t *signature, uint16_t origin, uint16_t refnr)
     cur_he.signature_available = true;
     cur_he.signature_verified = false;
     cur_he.timestamp_added = my_millis();
-    cur_he.lifetime = NO_TIMESTAMP;
+    cur_he.lifetime = 60002;
     cur_he.subtype = 0;
     time_t absexp = tdeck_get_time();
     cur_he.timestamp_added_abs = absexp;
@@ -875,16 +878,16 @@ bool mb_check_lifetime(void)
     
         bool has_expired = false;
 
-        if (he.lifetime == NO_DURATION)
+        if (he.lifetime == 65535)
         {
             nf.write((uint8_t*)&he, sizeof(history_entry));
             if ((he.local == GENERATED_EXTERNALLY) && (he.refnr > highest_oa_refnr)) highest_oa_refnr = he.refnr;
-            continue; // 0 is magic value for infinite lifetime
+            continue; // 65535 is magic value for infinite lifetime
         }
 
         if (now_abs > NO_TIMESTAMP)
         { // Device currently has wallclock time available
-            if ((he.expiry_absolute > 0) && (now_abs > he.expiry_absolute)) has_expired = true;
+            if ((he.expiry_absolute > NO_TIMESTAMP) && (now_abs > he.expiry_absolute)) has_expired = true;
         }
 
         if ((now_abs == NO_TIMESTAMP) || (he.expiry_absolute == NO_TIMESTAMP))
@@ -1016,7 +1019,11 @@ void mb_update_lifetime(uint16_t origin, uint16_t refnr, uint16_t lifetime)
     nf.close();
     LittleFS.remove(FILENAME_HISTORY);
     LittleFS.rename(FILENAME_HISTTMP, FILENAME_HISTORY);
-    if (deleted_something) mb_zap_counters();
+    if (deleted_something)
+    {
+        mb_zap_counters();
+        mb_count_and_show_last(true, infrastructure_in_crisis);
+    } 
     return;
 }
 
