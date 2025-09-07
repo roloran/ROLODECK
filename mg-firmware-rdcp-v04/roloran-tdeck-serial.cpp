@@ -924,14 +924,14 @@ void serial_process_command(String s, String processing_mode, bool persist_selec
       p1.toCharArray(oname, DATABUFLEN);
       char buffer[DATABUFLEN];
       snprintf(buffer, DATABUFLEN, "INFO: Device owner displayname set to %s\n", oname);
-      Serial.print(buffer);
+      serial_writeln(buffer);
       if (persist_selected_commands) persist_serial_command_for_replay(s);
     }
     else if (s_uppercase.startsWith("IDENTIFICATION"))
     {
       char output[DATABUFLEN];
-      snprintf(output, DATABUFLEN, "RDCP Address: %04X\n", getMyRDCPAddress());
-      Serial.print(output);
+      snprintf(output, DATABUFLEN, "INFO: RDCP Address: %04X\n", getMyRDCPAddress());
+      serial_writeln(output);
     }
     else
     {
