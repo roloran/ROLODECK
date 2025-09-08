@@ -857,7 +857,7 @@ void serial_process_command(String s, String processing_mode, bool persist_selec
       serial_writeln("INFO: Disabled");
       if (persist_selected_commands) persist_serial_command_for_replay(s);
     }
-    else if (s_uppercase.startsWith("UNLOCK ") || s_uppercase.startsWith("RINGTONE "))
+    else if (s_uppercase.startsWith("UNLOCK ") || s_uppercase.startsWith("RINGTONE ") || s_uppercase.startsWith("DISPLAYNAME ") || s_uppercase.startsWith("IDENTIFICATION"))
     {
       // handled below
     }
