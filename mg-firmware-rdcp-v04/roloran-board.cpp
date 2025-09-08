@@ -393,7 +393,15 @@ bool mb_add_external_message(char *text, char *rdcpmsg, uint16_t origin, uint16_
 {
     if (!hasStorage) return false;
 
-    if (refnr > highest_oa_refnr) highest_oa_refnr = refnr;
+    if (refnr >= highest_oa_refnr) // accept same refnr for multi-fragment OAs or if Signature was first
+    {
+        highest_oa_refnr = refnr;
+    }
+    else 
+    {
+        serial_writeln("INFO: Message board refuses to add external message, reference number too low");
+        return false;
+    }
 
     cur_he.local = GENERATED_EXTERNALLY;
     cur_he.display = displayrelevance;
@@ -781,6 +789,16 @@ void mb_rewrite_history_obs(int changeidx, bool deletion)
 void mb_add_signature(uint8_t *signature, uint16_t origin, uint16_t refnr)
 {
     if (!hasStorage) return;
+
+    if (refnr >= highest_oa_refnr) // accept same refnr if OA was first
+    {
+        highest_oa_refnr = refnr;
+    }
+    else 
+    {
+        serial_writeln("INFO: Message board refuses to add external message signature, reference number too low");
+        return;
+    }
 
     cur_he.local = GENERATED_EXTERNALLY;
     cur_he.display = NOT_RELEVANT_FOR_DISPLAYING;
