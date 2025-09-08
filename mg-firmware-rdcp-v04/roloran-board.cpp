@@ -1012,6 +1012,11 @@ void mb_update_lifetime(uint16_t origin, uint16_t refnr, uint16_t lifetime)
                 serial_writeln(info);
             }
         }
+        else 
+        { // entry does not need update
+            nf.write((uint8_t*)&he, sizeof(history_entry));
+            if ((he.local == GENERATED_EXTERNALLY) && (he.refnr > highest_oa_refnr)) highest_oa_refnr = he.refnr;
+        }
         i++;
     }
 
