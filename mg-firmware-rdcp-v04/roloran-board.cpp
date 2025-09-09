@@ -98,6 +98,31 @@ time_t tdeck_get_time(void)
     return e;
 }
 
+struct refnr_tracker {
+    int nextpos = 0;
+    uint16_t refnrs[10] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+};
+
+refnr_tracker deleted_oas;
+
+void mb_refnr_add_blocked(uint16_t refnr)
+{
+    bool found = false;
+    for (int i=0; i<10; i++) if (deleted_oas.refnrs[i] == refnr) found = true;
+    if (!found)
+    {
+        deleted_oas.refnrs[deleted_oas.nextpos] = refnr;
+        deleted_oas.nextpos = (deleted_oas.nextpos + 1) % 10;
+    }
+    return;
+}
+
+bool mb_refnr_is_blocked(uint16_t refnr)
+{
+    for (int i=0; i<10; i++) if (deleted_oas.refnrs[i] == refnr) return true;
+    return false;
+}
+
 /**
  * Convert the lifetime given in an Official Announcement RDCP Message
  * to seconds according to RDCP specs.
@@ -393,13 +418,11 @@ bool mb_add_external_message(char *text, char *rdcpmsg, uint16_t origin, uint16_
 {
     if (!hasStorage) return false;
 
-    if (refnr >= highest_oa_refnr) // accept same refnr for multi-fragment OAs or if Signature was first
-    {
-        highest_oa_refnr = refnr;
-    }
-    else 
-    {
-        serial_writeln("INFO: Message board refuses to add external message, reference number too low");
+    if (refnr > highest_oa_refnr) highest_oa_refnr = refnr;
+
+    if (mb_refnr_is_blocked(refnr))
+    { 
+        serial_writeln("INFO: Message board refuses to add external OA with blocked reference number");  
         return false;
     }
 
@@ -790,13 +813,11 @@ void mb_add_signature(uint8_t *signature, uint16_t origin, uint16_t refnr)
 {
     if (!hasStorage) return;
 
-    if (refnr >= highest_oa_refnr) // accept same refnr if OA was first
-    {
-        highest_oa_refnr = refnr;
-    }
-    else 
-    {
-        serial_writeln("INFO: Message board refuses to add external message signature, reference number too low");
+    if (refnr > highest_oa_refnr) highest_oa_refnr = refnr;
+
+    if (mb_refnr_is_blocked(refnr))
+    { 
+        serial_writeln("INFO: Message board refuses to add Signature with blocked reference number");  
         return;
     }
 
@@ -980,6 +1001,8 @@ void mb_update_lifetime(uint16_t origin, uint16_t refnr, uint16_t lifetime)
     }
 
     int i = 0;
+
+    if (lifetime == NO_DURATION) mb_refnr_add_blocked(refnr); // track deleted OAs
 
     while (histfile.read((uint8_t*)&he, sizeof(history_entry)) == sizeof(history_entry))
     {
