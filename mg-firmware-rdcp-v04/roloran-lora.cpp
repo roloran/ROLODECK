@@ -53,6 +53,7 @@ int64_t              has_txed_timestamp = NO_TIMESTAMP;
 int64_t timeNow(void) { return my_millis(); }
 
 int16_t getReceiveRSSI(void) { return receive_rssi; }
+uint8_t getReceiveSNR(void)  { return receive_snr; }
 
 void lora_send_now_base64(String txstring)
 {

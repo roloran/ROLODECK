@@ -120,6 +120,7 @@ void lora_radio_receivemode(void);
  * @return int16_t RSSI value
  */
 int16_t getReceiveRSSI(void);
+uint8_t getReceiveSNR(void);
 
 /**
  * Return the most recently received LoRa packet / RDCP message as Base64-encoded string. 

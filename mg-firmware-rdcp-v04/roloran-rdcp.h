@@ -620,5 +620,9 @@ int get_cire_state(void);
 
 void rdcp_dump_queues(void);
 
+void rdcpcsv_logfile_set_status(bool enabled);
+void rdcpcsv_logfile_delete(void);
+void rdcpcsv_logfile_dump(void);
+
 #endif
 /* EOF */

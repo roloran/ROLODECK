@@ -857,6 +857,22 @@ void serial_process_command(String s, String processing_mode, bool persist_selec
       serial_writeln("INFO: Disabled");
       if (persist_selected_commands) persist_serial_command_for_replay(s);
     }
+    else if (s_uppercase.startsWith("CSVLOGENABLE"))
+    {
+      rdcpcsv_logfile_set_status(true);
+    }
+    else if (s_uppercase.startsWith("CSVLOGDISABLE"))
+    {
+      rdcpcsv_logfile_set_status(false);
+    }
+    else if (s_uppercase.startsWith("CSVLOGDELETE"))
+    {
+      rdcpcsv_logfile_delete();
+    }
+    else if (s_uppercase.startsWith("CSVLOGDUMP"))
+    {
+      rdcpcsv_logfile_dump();
+    }
     else if (s_uppercase.startsWith("UNLOCK ") || s_uppercase.startsWith("RINGTONE ") || s_uppercase.startsWith("DISPLAYNAME ") || s_uppercase.startsWith("IDENTIFICATION"))
     {
       // handled below

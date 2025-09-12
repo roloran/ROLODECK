@@ -154,6 +154,70 @@ bool rdcp_check_crc_in(uint8_t real_packet_length)
 
 int64_t last_csv_timestamp = NO_TIMESTAMP;
 
+bool     rdcpcsv_logfile_enabled = false;
+uint16_t rdcpcsv_logfile_count   = 0;
+#define  FILENAME_RDCPCSV_LOGFILE "/rdcpcsv.log"
+#define  RDCPCSV_LOGFILE_MAX_ENTRIES 15000
+
+void rdcpcsv_logfile_set_status(bool enabled)
+{
+  rdcpcsv_logfile_enabled = enabled;
+  if (enabled) 
+    serial_writeln("INFO: RDCPCSV Logfile enabled");
+  else 
+    serial_writeln("INFO: RDCPCSV Logfile disabled");
+  return;
+}
+
+void rdcpcsv_logfile_append(String info)
+{
+  if (!rdcpcsv_logfile_enabled) return;
+  if (rdcpcsv_logfile_count > RDCPCSV_LOGFILE_MAX_ENTRIES)
+  {
+    serial_writeln("ERROR: RDCPCSV logfile maximum size exceeded");
+    return;
+  }
+  rdcpcsv_logfile_count++;
+  File f = LittleFS.open(FILENAME_RDCPCSV_LOGFILE, FILE_APPEND);
+  if (!f) return;
+
+  char c_info[INFOLEN];
+  info.toCharArray(c_info, INFOLEN);
+
+  f.printf("%s\n", c_info);
+  f.close();
+  return;
+}
+
+void rdcpcsv_logfile_delete(void)
+{
+  LittleFS.remove(FILENAME_RDCPCSV_LOGFILE);
+  rdcpcsv_logfile_count = 0;
+  serial_writeln("INFO: RDCPCSV logfile deleted");
+  return;
+}
+
+void rdcpcsv_logfile_dump(void)
+{
+  File f = LittleFS.open(FILENAME_RDCPCSV_LOGFILE, FILE_READ);
+  if (!f)
+  {
+    serial_writeln("INFO: No RDCPCSV logfile available");
+    return;
+  }
+  serial_writeln("INFO: BEGIN OF RDCPCSV LOGFILE");
+
+  while (f.available())
+  {
+    String line = f.readStringUntil('\n');
+    serial_writeln(line);
+  }
+
+  f.close();
+  serial_writeln("INFO: END OF RDCPCSV LOGFILE");
+  return;
+}
+
 void print_rdcp_csv(void)
 {
   int64_t now = my_millis();
@@ -169,7 +233,7 @@ void print_rdcp_csv(void)
     refnr = rdcp_msg_in.payload.data[0] + 256 * rdcp_msg_in.payload.data[1];
   }
 
-  snprintf(info, FATLEN, "RDCPCSV: %04X,%" PRId64 ",%" PRId64 ",%" PRId64 ",%" PRId64 ",%d,%04X,%d,%04X,%04X,%04X,%04X,%02X,%d,%02X,%02X,%02X,%04X,%d,%3.3f", 
+  snprintf(info, FATLEN, "RDCPCSV: %04X,%" PRId64 ",%" PRId64 ",%" PRId64 ",%" PRId64 ",%d,%04X,%d,%04X,%04X,%04X,%04X,%02X,%d,%02X,%02X,%02X,%04X,%d,%3.3f,%d,%d", 
     getMyRDCPAddress(),
     now - last_csv_timestamp,
     now, 
@@ -189,9 +253,12 @@ void print_rdcp_csv(void)
     rdcp_msg_in.header.relay3,
     rdcp_msg_in.header.checksum,
     most_recent_airtime,
-    getMyLoRaFrequency() 
+    getMyLoRaFrequency(),
+    getReceiveRSSI(),
+    getReceiveSNR()    
   );
   serial_writeln(info);
+  rdcpcsv_logfile_append(info);
 
   last_csv_timestamp = now;
 
