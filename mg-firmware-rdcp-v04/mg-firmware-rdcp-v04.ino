@@ -113,10 +113,12 @@ void loop(void)
       tdeck_loop();
       if (shall_show_eula())
       {
+        serial_writeln("INFO: Showing EULA screen");
         gui_transition_to_screen(SCREEN_EULA); // Default screen on start-up
       }
       else
       {
+        serial_writeln("INFO: Skipping EULA screen");
         gui_transition_to_screen(SCREEN_OACRISIS); // Directly go to OA CRISIS screen if no EULA is shown
       }
       set_gui_needs_screen_refresh(true);

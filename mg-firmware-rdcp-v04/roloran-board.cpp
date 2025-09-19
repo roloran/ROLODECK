@@ -1242,9 +1242,11 @@ void mb_show_current(int as_number)
                 (gui_get_current_screen() != SCREEN_EMERGENCY) &&
                 (gui_get_current_screen() != SCREEN_EMERSTEPTWO) &&
                 (gui_get_current_screen() != SCREEN_CIRE) &&
-                (gui_get_current_screen() != SCREEN_RESP)
+                (gui_get_current_screen() != SCREEN_RESP) &&
+                (gui_get_current_screen() != SCREEN_EULA)
                )
             {
+              serial_writeln("INFO: Switching to OA Crisis UI screen to show current message");
               gui_transition_to_screen(SCREEN_OACRISIS);
             }
         }
@@ -1358,7 +1360,8 @@ void mb_show_current(int as_number)
 
     if (!cur_he.crisis)
     { // show non-crisis message
-        if (gui_get_current_screen() != SCREEN_OANONCRISIS)
+        if ((gui_get_current_screen() != SCREEN_OANONCRISIS) &&
+            (gui_get_current_screen() != SCREEN_EULA))
         {
             gui_transition_to_screen(SCREEN_OANONCRISIS);
         }

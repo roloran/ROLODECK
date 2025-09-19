@@ -306,7 +306,7 @@ uint16_t getRoamingRecommendation(uint32_t timeframe = MINUTES_TO_MILLISECONDS*1
 bool do_show_eula = true;
 bool checked_poweron_counter = false;
 
-#define FILENAME_COUNT "/usagecnt"
+#define FILENAME_COUNT "/usagectr"
 #define SKIP_EULA_AFTER 20
 
 bool shall_show_eula(void)

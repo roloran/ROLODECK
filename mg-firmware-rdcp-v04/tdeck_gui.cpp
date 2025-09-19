@@ -37,6 +37,10 @@ void gui_transition_to_screen(uint8_t screenId)
   if ((my_current_screen == SCREEN_SPLASH) && (my_previous_screen == SCREEN_SPLASH)) my_current_screen = my_previous_nonsplash_screen;
 
   cpu_high();
+  
+  char uiinfo[INFOLEN];
+  snprintf(uiinfo, INFOLEN, "INFO: Switching to UI screen %d", my_current_screen);
+  serial_writeln(uiinfo);
 
   switch(my_current_screen)
   {
@@ -331,6 +335,7 @@ void gui_callback_eula_ok(lv_event_t *e)
 
   if (event_code == LV_EVENT_CLICKED)
   {
+    serial_writeln("INFO: EULA has been acknowledged");
     if (infrastructure_in_crisis)
     {
       gui_transition_to_screen(SCREEN_OACRISIS);
