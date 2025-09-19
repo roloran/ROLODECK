@@ -16,7 +16,7 @@ void ui_ScreenMaintenance_screen_init(void)
     lv_obj_set_x(ui_LabelMaintenanceMiddle, -2);
     lv_obj_set_y(ui_LabelMaintenanceMiddle, -39);
     lv_obj_set_align(ui_LabelMaintenanceMiddle, LV_ALIGN_CENTER);
-    lv_label_set_text(ui_LabelMaintenanceMiddle, "Bitte starten Sie diesen Apparat neu!");
+    lv_label_set_text(ui_LabelMaintenanceMiddle, "Bitte den MERLIN-Messenger neu starten!");
     lv_obj_set_style_text_font(ui_LabelMaintenanceMiddle, &ui_font_Hack14, LV_PART_MAIN | LV_STATE_DEFAULT);
 
     ui_LabelMaintenanceTop = lv_label_create(ui_ScreenMaintenance);

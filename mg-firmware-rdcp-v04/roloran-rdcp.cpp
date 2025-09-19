@@ -1796,7 +1796,7 @@ void rdcp_cire_ack(uint16_t origin, uint16_t confirmedseqnr, uint8_t acktype)
     {
       serial_writeln("INFO: Positive ACK from HQ received");
       char gui_text[FATLEN];
-      snprintf(gui_text, FATLEN, "Ihre Meldung %04X-%d ist beim Krisenstab eingegangen. Bitte lassen Sie den Pager eingeschaltet, falls es weitere Informationen oder Fragen zu Ihrer Meldung gibt.", getMyRDCPAddress(), cire_current_refnr);
+      snprintf(gui_text, FATLEN, "Ihre Meldung %04X-%d ist beim Krisenstab eingegangen. Bitte lassen Sie den MERLIN-Messenger eingeschaltet, falls es weitere Informationen oder Fragen zu Ihrer Meldung gibt.", getMyRDCPAddress(), cire_current_refnr);
       mb_add_local_message(gui_text, cire_current_refnr, ++cire_guitext_num, RDCP_TWO_DAYS, true);
     }
     else if (acktype == RDCP_ACKNOWLEDGMENT_NEGATIVE)

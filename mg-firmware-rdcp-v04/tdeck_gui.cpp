@@ -37,7 +37,7 @@ void gui_transition_to_screen(uint8_t screenId)
   if ((my_current_screen == SCREEN_SPLASH) && (my_previous_screen == SCREEN_SPLASH)) my_current_screen = my_previous_nonsplash_screen;
 
   cpu_high();
-  
+
   char uiinfo[INFOLEN];
   snprintf(uiinfo, INFOLEN, "INFO: Switching to UI screen %d", my_current_screen);
   serial_writeln(uiinfo);
@@ -185,7 +185,7 @@ void gui_callback_cire(lv_event_t *e)
       gui_disable_cire_buttons();
 
       char gui_text[FATLEN];
-      snprintf(gui_text, FATLEN, "\nIhre Nachricht (\"%s\") wird mit der Referenznummer %04X-%d gesendet. Bitte lassen Sie den Pager eingeschaltet und warten Sie auf weitere Informationen.", c_what, getMyRDCPAddress(), refnr);
+      snprintf(gui_text, FATLEN, "\nIhre Nachricht (\"%s\") wird mit der Referenznummer %04X-%d gesendet. Bitte lassen Sie den MERLIN-Messenger eingeschaltet und warten Sie auf weitere Informationen.", c_what, getMyRDCPAddress(), refnr);
       mb_add_local_message(gui_text, refnr, 0, 60002, true);
 
       lv_textarea_set_text(ui_TextAreaCIREFreetext, "");
@@ -236,7 +236,7 @@ void gui_callback_resp_submit(lv_event_t *e)
       gui_disable_cire_buttons();
 
       char gui_text[FATLEN];
-      snprintf(gui_text, FATLEN, "\nIhre Antwort (\"%s\") wird mit der Referenznummer %04X-%04X gesendet. Bitte lassen Sie den Pager eingeschaltet und warten Sie auf weitere Informationen.", ciretext, getMyRDCPAddress(), refnr);
+      snprintf(gui_text, FATLEN, "\nIhre Antwort (\"%s\") wird mit der Referenznummer %04X-%04X gesendet. Bitte lassen Sie den MERLIN-Messenger eingeschaltet und warten Sie auf weitere Informationen.", ciretext, getMyRDCPAddress(), refnr);
       mb_add_local_message(gui_text, refnr, 0, RDCP_TWO_DAYS, true);
 
       lv_textarea_set_text(ui_TextAreaRESPFreetext, "");
@@ -523,7 +523,7 @@ void gui_callback_emer_send(lv_event_t *e)
     for (int i=0; i<5; i++) tdeck_loop();
 
     char gui_text[FATLEN];
-    snprintf(gui_text, FATLEN, "Ihre Nachricht (\"%s\") wird mit der Referenznummer %04X-%d gesendet. Bitte lassen Sie den Pager eingeschaltet und warten Sie auf weitere Informationen.", c_what, getMyRDCPAddress(), refnr);
+    snprintf(gui_text, FATLEN, "Ihre Nachricht (\"%s\") wird mit der Referenznummer %04X-%d gesendet. Bitte lassen Sie den MERLIN-Messenger eingeschaltet und warten Sie auf weitere Informationen.", c_what, getMyRDCPAddress(), refnr);
     mb_add_local_message(gui_text, refnr, 0, RDCP_TWO_DAYS, true);
 
     lv_textarea_set_text(ui_TextAreaEMERWhere, "");
