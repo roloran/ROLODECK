@@ -277,12 +277,12 @@ void gui_switch_red_button_mode(uint8_t new_mode)
   if (new_mode == RED_BUTTON_MODE_EMERGENCY)
   {
     red_button_mode = RED_BUTTON_MODE_EMERGENCY;
-
     gui_enable_cire_buttons();
   }
   else
   {
     red_button_mode = RED_BUTTON_MODE_INQUIRY;
+    gui_enable_cire_buttons();
     
     lv_label_set_text(ui_LabelButtonEMER, "Nachfrage\nbeantworten");
     lv_label_set_text(ui_LabelButtonCIRE, " \n ");
