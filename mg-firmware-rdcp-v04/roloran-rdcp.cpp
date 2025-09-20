@@ -2247,6 +2247,7 @@ void rdcp_mg_process_incoming_private_oa(bool is_duplicate)
         gui_switch_red_button_mode(RED_BUTTON_MODE_INQUIRY);
         set_current_inquiry_refnr(refnr);
         if (gui_get_current_screen() == SCREEN_OANONCRISIS) gui_transition_to_screen(SCREEN_OACRISIS);
+        gui_switch_red_button_mode(RED_BUTTON_MODE_INQUIRY);
       }
     }
   }
