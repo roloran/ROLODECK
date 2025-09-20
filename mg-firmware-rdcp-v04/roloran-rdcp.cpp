@@ -1754,7 +1754,7 @@ void rdcp_cire_ack(uint16_t origin, uint16_t confirmedseqnr, uint8_t acktype)
       cire_state = CIRE_STATE_WAIT_HQ;
 
       char gui_text[FATLEN];
-      snprintf(gui_text, FATLEN, "Ihre Meldung %04X-%d wird inzwischen von der Infrastruktur zum Krisenstab transportiert. Bitte warten Sie auf weitere Informationen.", getMyRDCPAddress(), cire_current_refnr);
+      snprintf(gui_text, FATLEN, "Ihre Meldung %04X-%04X wird inzwischen von der Infrastruktur zum Krisenstab transportiert. Bitte warten Sie auf weitere Informationen.", getMyRDCPAddress(), cire_current_refnr);
       //gui_crisis_add_text(gui_text);
       mb_add_local_message(gui_text, cire_current_refnr, ++cire_guitext_num, RDCP_TWO_DAYS, true);
     }
@@ -1766,7 +1766,7 @@ void rdcp_cire_ack(uint16_t origin, uint16_t confirmedseqnr, uint8_t acktype)
       cire_retry = 0;
 
       char gui_text[FATLEN];
-      snprintf(gui_text, FATLEN, "WICHTIG: Ihre Meldung %04X-%d kann nicht verarbeitet werden, da die Infrastruktur nicht im Krisen-Betriebsmodus ist. Falls Sie Hilfe brauchen, kontaktieren Sie Rettungsdienste oder die Gemeinde bitte anderweitig.", getMyRDCPAddress(), cire_current_refnr);
+      snprintf(gui_text, FATLEN, "WICHTIG: Ihre Meldung %04X-%04X kann nicht verarbeitet werden, da die Infrastruktur nicht im Krisen-Betriebsmodus ist. Falls Sie Hilfe brauchen, kontaktieren Sie Rettungsdienste oder die Gemeinde bitte anderweitig.", getMyRDCPAddress(), cire_current_refnr);
       mb_add_local_message(gui_text, cire_current_refnr, ++cire_guitext_num, RDCP_TWO_DAYS, true);
       mb_add_local_message(gui_text, cire_current_refnr, ++cire_guitext_num, RDCP_TWO_DAYS, false); // Add message to both crisis and non-crisis screen
       gui_enable_cire_buttons();
@@ -1777,7 +1777,7 @@ void rdcp_cire_ack(uint16_t origin, uint16_t confirmedseqnr, uint8_t acktype)
       serial_writeln("INFO: Positive-negative ACK from DA received, waiting for HQ ACK");
       cire_state = CIRE_STATE_WAIT_HQ;
       char gui_text[FATLEN];
-      snprintf(gui_text, FATLEN, "Ihre Meldung %04X-%d wird inzwischen von der Infrastruktur zum Krisenstab transportiert. Bitte warten Sie auf weitere Informationen. Bitte beachten Sie, dass der Krisenstab derzeit nicht besetzt ist.", getMyRDCPAddress(), cire_current_refnr);
+      snprintf(gui_text, FATLEN, "Ihre Meldung %04X-%04X wird inzwischen von der Infrastruktur zum Krisenstab transportiert. Bitte warten Sie auf weitere Informationen. Bitte beachten Sie, dass der Krisenstab derzeit nicht besetzt ist.", getMyRDCPAddress(), cire_current_refnr);
       mb_add_local_message(gui_text, cire_current_refnr, ++cire_guitext_num, RDCP_TWO_DAYS, true);
     }
     else
@@ -1800,14 +1800,14 @@ void rdcp_cire_ack(uint16_t origin, uint16_t confirmedseqnr, uint8_t acktype)
     {
       serial_writeln("INFO: Positive ACK from HQ received");
       char gui_text[FATLEN];
-      snprintf(gui_text, FATLEN, "Ihre Meldung %04X-%d ist beim Krisenstab eingegangen. Bitte lassen Sie den MERLIN-Messenger eingeschaltet, falls es weitere Informationen oder Fragen zu Ihrer Meldung gibt.", getMyRDCPAddress(), cire_current_refnr);
+      snprintf(gui_text, FATLEN, "Ihre Meldung %04X-%04X ist beim Krisenstab eingegangen. Bitte lassen Sie den MERLIN-Messenger eingeschaltet, falls es weitere Informationen oder Fragen zu Ihrer Meldung gibt.", getMyRDCPAddress(), cire_current_refnr);
       mb_add_local_message(gui_text, cire_current_refnr, ++cire_guitext_num, RDCP_TWO_DAYS, true);
     }
     else if (acktype == RDCP_ACKNOWLEDGMENT_NEGATIVE)
     {
       serial_writeln("INFO: Negative ACK from HQ received");
       char gui_text[FATLEN];
-      snprintf(gui_text, FATLEN, "WICHTIG: Ihre Meldung %04X-%d wurde an die Gemeinde geschickt, kann aber nicht verarbeitet werden, da die Infrastruktur derzeit nicht im Krisen-Betriebsmodus ist. Falls Sie Hilfe brauchen, kontaktieren Sie Rettungsdienste oder die Gemeinde bitte anderweitig.", getMyRDCPAddress(), cire_current_refnr);
+      snprintf(gui_text, FATLEN, "WICHTIG: Ihre Meldung %04X-%04X wurde an die Gemeinde geschickt, kann aber nicht verarbeitet werden, da die Infrastruktur derzeit nicht im Krisen-Betriebsmodus ist. Falls Sie Hilfe brauchen, kontaktieren Sie Rettungsdienste oder die Gemeinde bitte anderweitig.", getMyRDCPAddress(), cire_current_refnr);
       mb_add_local_message(gui_text, cire_current_refnr, ++cire_guitext_num, RDCP_TWO_DAYS, true);
       mb_add_local_message(gui_text, cire_current_refnr, ++cire_guitext_num, RDCP_TWO_DAYS, false); // Add message to both crisis and non-crisis screen
       gui_transition_to_screen(SCREEN_OANONCRISIS);
@@ -1816,7 +1816,7 @@ void rdcp_cire_ack(uint16_t origin, uint16_t confirmedseqnr, uint8_t acktype)
     {
       serial_writeln("INFO: Positive-negative ACK from HQ received");
       char gui_text[FATLEN];
-      snprintf(gui_text, FATLEN, "Ihre Meldung %04X-%d ist beim Krisenstab eingegangen. Dieser ist derzeit nicht besetzt, wird Ihre Meldung aber noch bearbeiten.", getMyRDCPAddress(), cire_current_refnr);
+      snprintf(gui_text, FATLEN, "Ihre Meldung %04X-%04X ist beim Krisenstab eingegangen. Dieser ist derzeit nicht besetzt, wird Ihre Meldung aber noch bearbeiten.", getMyRDCPAddress(), cire_current_refnr);
       mb_add_local_message(gui_text, cire_current_refnr, ++cire_guitext_num, RDCP_TWO_DAYS, true);
     }
     else
