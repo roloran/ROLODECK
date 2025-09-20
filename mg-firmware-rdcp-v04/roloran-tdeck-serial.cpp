@@ -23,6 +23,7 @@ uint16_t simrx_buffer_length = 0;
 int64_t  simrx_timestamp = 0;
 extern   bool repeater_mode;
 extern   bool hq_mode;
+extern   uint8_t corridor_seconds;
 
 bool pre_banner_mode = true;
 String SERIAL_NOTE = "";
@@ -529,6 +530,16 @@ void serial_process_command(String s, String processing_mode, bool persist_selec
       uint16_t new_grace_period = strtol(buffer, NULL, 10);
       set_grace_period((int64_t) new_grace_period * SECONDS_TO_MILLISECONDS);
       serial_writeln("INFO: Changed grace period to " + p1 + " seconds");
+      if (persist_selected_commands) persist_serial_command_for_replay(s);
+    }
+    else if (s_uppercase.startsWith("CORRIDOR "))
+    {
+      String p1 = s.substring(9);
+      char buffer[MINIBUFLEN];
+      p1.toCharArray(buffer, MINIBUFLEN);
+      uint16_t new_corridor_seconds = strtol(buffer, NULL, 10);
+      corridor_seconds = new_corridor_seconds;
+      serial_writeln("INFO: Changed corridor duration to " + p1 + " seconds");
       if (persist_selected_commands) persist_serial_command_for_replay(s);
     }
     else if (s_uppercase.startsWith("CIRETIMEDA "))

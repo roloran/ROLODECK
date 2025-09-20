@@ -39,6 +39,7 @@ uint16_t most_recent_airtime = NO_DURATION;
 uint8_t most_recent_future_timeslots = 0;
 
 extern   bool hq_mode;
+uint8_t  corridor_seconds = 10; // number of seconds to add to CFEst if hearing a CIRE to let DA ACKs come through
 
 uint8_t cire_retry = 0;     // How often did we already try to send a CIRE?
 int64_t cire_starttime = NO_TIMESTAMP; // When was the CIRE sent?
@@ -450,7 +451,7 @@ bool rdcp_mg_process_rxed_lora_packet(uint8_t *lora_packet, uint16_t lora_packet
   */
   if (!hq_mode)
     if ((rdcp_msg_in.header.message_type == RDCP_MSGTYPE_CITIZEN_REPORT) &&
-        (rdcp_msg_in.header.sender >= RDCP_ADDRESS_MG_LOWERBOUND)) rdcp_update_channel_free_estimation(CFEst + 1 * MINUTES_TO_MILLISECONDS);
+        (rdcp_msg_in.header.sender >= RDCP_ADDRESS_MG_LOWERBOUND)) rdcp_update_channel_free_estimation(CFEst + corridor_seconds * SECONDS_TO_MILLISECONDS);
 
   /* Repeat the RDCP Message if the device is configured accordingly. */
   if (!is_duplicate) rdcp_repeater();
@@ -1670,8 +1671,8 @@ void rdcp_cire_resend(void)
   return;
 }
 
-uint16_t cire_timeout_ack_da = 60;  // default: 1 minute
-uint16_t cire_timeout_ack_hq = 900; // default: 15 minutes
+uint16_t cire_timeout_ack_da = 20;  // default: 20 seconds
+uint16_t cire_timeout_ack_hq = 180; // default:  3 minutes
 
 void set_ciretime_da(uint16_t timeout)
 {
