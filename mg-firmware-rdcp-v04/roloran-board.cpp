@@ -426,6 +426,9 @@ bool mb_add_external_message(char *text, char *rdcpmsg, uint16_t origin, uint16_
         return false;
     }
 
+    bool play_ringtone = true;
+    if (strstr(text, "***") != NULL) play_ringtone = false; // disable ringtone based on message content
+
     cur_he.local = GENERATED_EXTERNALLY;
     cur_he.display = displayrelevance;
     cur_he.forall = deviceonlyrelevance;
@@ -506,7 +509,7 @@ bool mb_add_external_message(char *text, char *rdcpmsg, uint16_t origin, uint16_
     {
         mb_count_and_show_last(); // mb_refresh_display();
         if (is_screensaver_on()) screensaver_off();
-        audio_play_melody();
+        if ((cur_he.crisis) && play_ringtone) audio_play_melody(); // play ringtone for crisis OAs only
     }
 
     return true;
