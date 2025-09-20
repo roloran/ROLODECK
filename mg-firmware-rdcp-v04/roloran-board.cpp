@@ -33,7 +33,7 @@ struct history_entry {
     uint16_t origin = RDCP_LOCAL_ORIGIN;       //< RDCP Origin of the message or 0 for locally created messages
     uint16_t seqnr = RDCP_NO_SEQUENCE_NUMBER;  //< RDCP Header SequenceNumber or number of multi-step local message
     uint16_t refnr = RDCP_NO_REFERENCE_NUMBER; //< ReferenceNumber as used, e.g., in OA and CIRE subheaders
-    int16_t lifetime = NO_DURATION;             //< lifetime setting for message (can have magic values according to RDCP specs)
+    uint16_t lifetime = NO_DURATION;             //< lifetime setting for message (can have magic values according to RDCP specs)
     uint8_t morefragments = 0;        //< Number of subsequently following/expected fragments of the same message
     char content_rdcp[CONTENT_RDCP_SIZE];      //< Base64-encoded RDCP message (LoRa packet payload) for received messages
     char content_text[CONTENT_TEXT_SIZE];          //< Textual content of the message (decrypted and de-unishox2'd for received messages)
@@ -952,7 +952,7 @@ bool mb_check_lifetime(void)
         {
             deleted_something = true;
             char info[INFOLEN];
-            snprintf(info, INFOLEN, "INFO: Dropped MB entry o%04X r%04X - expired", he.origin, he.refnr);
+            snprintf(info, INFOLEN, "INFO: Dropped MB entry o%04X r%04X - expired, lifetime %d", he.origin, he.refnr, he.lifetime);
             serial_writeln(info);
         }
         i++;

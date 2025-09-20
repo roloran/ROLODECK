@@ -2214,7 +2214,7 @@ void rdcp_mg_process_incoming_private_oa(bool is_duplicate)
     unsigned int len = unishox2_decompress_simple((char*)uuContent, msg_len, oa);
     oa[len] = 0;
 
-    snprintf(info, FATLEN, "INFO: Received Private OA, type %02X, refnr %04X, content: %s", subtype, refnr, oa);
+    snprintf(info, FATLEN, "INFO: Received Private OA, type %02X, refnr %04X, lifetime: %d, content: %s", subtype, refnr, lifetime, oa);
     serial_writeln(info);
 
     if (subtype == RDCP_MSGTYPE_OA_SUBTYPE_CRISIS_TXT)
