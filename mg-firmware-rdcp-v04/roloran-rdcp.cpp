@@ -444,9 +444,11 @@ bool rdcp_mg_process_rxed_lora_packet(uint8_t *lora_packet, uint16_t lora_packet
   /*
     If the received message is a CIRE sent by another MG, we should try to keep the channel
     free for the EP DA's ACK reply. 
+    However, disable this in HQ mode.
   */
-  if ((rdcp_msg_in.header.message_type == RDCP_MSGTYPE_CITIZEN_REPORT) &&
-      (rdcp_msg_in.header.sender >= RDCP_ADDRESS_MG_LOWERBOUND)) rdcp_update_channel_free_estimation(CFEst + 1 * MINUTES_TO_MILLISECONDS);
+  if (!hq_mode)
+    if ((rdcp_msg_in.header.message_type == RDCP_MSGTYPE_CITIZEN_REPORT) &&
+        (rdcp_msg_in.header.sender >= RDCP_ADDRESS_MG_LOWERBOUND)) rdcp_update_channel_free_estimation(CFEst + 1 * MINUTES_TO_MILLISECONDS);
 
   /* Repeat the RDCP Message if the device is configured accordingly. */
   if (!is_duplicate) rdcp_repeater();

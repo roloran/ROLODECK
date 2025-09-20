@@ -52,6 +52,8 @@ uint32_t MY_SCREENSAVER_DELAY = 30000; //< After how many milliseconds should th
 uint32_t getScreensaverDelay(void)           { return MY_SCREENSAVER_DELAY; }
 void     setScreensaverDelay(uint32_t delay) { MY_SCREENSAVER_DELAY = delay; return; }
 
+bool     hq_mode = false;
+
 void addMyEntryPoint(uint16_t ep)
 {
   bool added = false;

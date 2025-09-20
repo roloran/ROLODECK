@@ -282,6 +282,7 @@ void gui_switch_red_button_mode(uint8_t new_mode)
   else
   {
     gui_enable_cire_buttons();
+    tdeck_loop();
     red_button_mode = RED_BUTTON_MODE_INQUIRY;
     
     lv_label_set_text(ui_LabelButtonEMER, "Nachfrage\nbeantworten");
@@ -290,6 +291,7 @@ void gui_switch_red_button_mode(uint8_t new_mode)
     lv_obj_set_style_bg_color(ui_ButtonEMER, lv_color_hex(0xff8800), LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_set_style_bg_color(ui_ButtonCIRE, lv_color_hex(0x444444), LV_PART_MAIN | LV_STATE_DEFAULT);
     set_gui_needs_screen_refresh(true);
+    tdeck_loop();
   }
   return;
 }

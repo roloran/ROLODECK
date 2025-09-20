@@ -22,6 +22,7 @@ uint8_t  simrx_buffer[BUFLEN];
 uint16_t simrx_buffer_length = 0;
 int64_t  simrx_timestamp = 0;
 extern   bool repeater_mode;
+extern   bool hq_mode;
 
 bool pre_banner_mode = true;
 String SERIAL_NOTE = "";
@@ -612,6 +613,20 @@ void serial_process_command(String s, String processing_mode, bool persist_selec
       uint16_t target = strtol(buffer, NULL, 16);
       rdcp_mg_send_test_message(target, p2);
     }
+    else if (s_uppercase.startsWith("HQMODE"))
+    {
+      if (hq_mode)
+      {
+        hq_mode = false; 
+        serial_writeln("INFO: HQ Mode disabled");
+      }
+      else 
+      {
+        hq_mode = true;
+        serial_writeln("INFO: HQ Mode enabled");
+      }
+      if (persist_selected_commands) persist_serial_command_for_replay(s);
+    }    
     else if (s_uppercase.startsWith("RDCPCIRE "))
     {
       String p1 = s.substring(9, 11);  // Subtype
