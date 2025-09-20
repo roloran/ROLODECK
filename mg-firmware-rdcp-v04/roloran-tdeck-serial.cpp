@@ -309,6 +309,20 @@ void serial_process_command(String s, String processing_mode, bool persist_selec
       }
       // Further RESET commands can be added here
     } // ^ RESET
+    else if (s_uppercase.startsWith("HQMODE"))
+    {
+      if (hq_mode)
+      {
+        hq_mode = false; 
+        serial_writeln("INFO: HQ Mode disabled");
+      }
+      else 
+      {
+        hq_mode = true;
+        serial_writeln("INFO: HQ Mode enabled");
+      }
+      if (persist_selected_commands) persist_serial_command_for_replay(s);
+    }    
     else if (s_uppercase.startsWith("SHOW "))
     {
       String p1= s_uppercase.substring(5);
@@ -613,20 +627,6 @@ void serial_process_command(String s, String processing_mode, bool persist_selec
       uint16_t target = strtol(buffer, NULL, 16);
       rdcp_mg_send_test_message(target, p2);
     }
-    else if (s_uppercase.startsWith("HQMODE"))
-    {
-      if (hq_mode)
-      {
-        hq_mode = false; 
-        serial_writeln("INFO: HQ Mode disabled");
-      }
-      else 
-      {
-        hq_mode = true;
-        serial_writeln("INFO: HQ Mode enabled");
-      }
-      if (persist_selected_commands) persist_serial_command_for_replay(s);
-    }    
     else if (s_uppercase.startsWith("RDCPCIRE "))
     {
       String p1 = s.substring(9, 11);  // Subtype

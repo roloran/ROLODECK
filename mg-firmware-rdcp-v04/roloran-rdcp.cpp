@@ -38,6 +38,8 @@ int32_t bad_crc_counter = 0;
 uint16_t most_recent_airtime = NO_DURATION;
 uint8_t most_recent_future_timeslots = 0;
 
+extern   bool hq_mode;
+
 uint8_t cire_retry = 0;     // How often did we already try to send a CIRE?
 int64_t cire_starttime = NO_TIMESTAMP; // When was the CIRE sent?
 #define CIRE_STATE_NONE    0
