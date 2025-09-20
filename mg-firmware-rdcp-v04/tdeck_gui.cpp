@@ -281,14 +281,15 @@ void gui_switch_red_button_mode(uint8_t new_mode)
   }
   else
   {
-    red_button_mode = RED_BUTTON_MODE_INQUIRY;
     gui_enable_cire_buttons();
+    red_button_mode = RED_BUTTON_MODE_INQUIRY;
     
     lv_label_set_text(ui_LabelButtonEMER, "Nachfrage\nbeantworten");
     lv_label_set_text(ui_LabelButtonCIRE, " \n ");
     lv_obj_add_state(ui_LabelButtonCIRE, LV_STATE_DISABLED);
     lv_obj_set_style_bg_color(ui_ButtonEMER, lv_color_hex(0xff8800), LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_set_style_bg_color(ui_ButtonCIRE, lv_color_hex(0x444444), LV_PART_MAIN | LV_STATE_DEFAULT);
+    set_gui_needs_screen_refresh(true);
   }
   return;
 }
