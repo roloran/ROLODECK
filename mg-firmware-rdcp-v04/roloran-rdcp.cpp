@@ -1654,7 +1654,7 @@ void rdcp_cire_resend(void)
     LittleFS.remove(FILENAME_CIRE);
 
     char gui_text[FATLEN];
-    snprintf(gui_text, FATLEN, "WICHTIG: Ihre Meldung %04X-%d konnte anhaltend NICHT an den Krisenstab zugestellt werden. Bitte weichen Sie auf andere Kommunikationswege aus oder versuchen Sie es zu einer anderen Zeit und ggf. von einem anderen Ort aus erneut.", getMyRDCPAddress(), cire_current_refnr);
+    snprintf(gui_text, FATLEN, "WICHTIG: Ihre Meldung %04X-%04X konnte anhaltend NICHT an den Krisenstab zugestellt werden. Bitte weichen Sie auf andere Kommunikationswege aus oder versuchen Sie es zu einer anderen Zeit und ggf. von einem anderen Ort aus erneut.", getMyRDCPAddress(), cire_current_refnr);
     mb_add_local_message(gui_text, cire_current_refnr, ++cire_guitext_num, RDCP_TWO_DAYS, true);
 
     gui_enable_cire_buttons();
@@ -1701,7 +1701,7 @@ void rdcp_cire_check(void)
       serial_writeln("WARNING: CIRE Timeout waiting for ACK from DA");
 
       char gui_text[FATLEN];
-      snprintf(gui_text, FATLEN, "Ihre Meldung %04X-%d wird erneut gesendet, da noch keine Eingangsmeldung von der Infrastruktur vorliegt.", getMyRDCPAddress(), cire_current_refnr);
+      snprintf(gui_text, FATLEN, "Ihre Meldung %04X-%04X wird erneut gesendet, da noch keine Eingangsmeldung von der Infrastruktur vorliegt.", getMyRDCPAddress(), cire_current_refnr);
       mb_add_local_message(gui_text, cire_current_refnr, ++cire_guitext_num, RDCP_TWO_DAYS, true);
 
       rdcp_cire_resend();
@@ -1715,7 +1715,7 @@ void rdcp_cire_check(void)
       serial_writeln("WARNING: CIRE Timeout waiting for ACK from HQ");
 
       char gui_text[FATLEN];
-      snprintf(gui_text, FATLEN, "Ihre Meldung %04X-%d wird erneut gesendet, da noch keine Eingangsmeldung vom Krisenstab vorliegt.", getMyRDCPAddress(), cire_current_refnr);
+      snprintf(gui_text, FATLEN, "Ihre Meldung %04X-%04X wird erneut gesendet, da noch keine Eingangsmeldung vom Krisenstab vorliegt.", getMyRDCPAddress(), cire_current_refnr);
       mb_add_local_message(gui_text, cire_current_refnr, ++cire_guitext_num, RDCP_TWO_DAYS, true);
 
       rdcp_cire_resend();

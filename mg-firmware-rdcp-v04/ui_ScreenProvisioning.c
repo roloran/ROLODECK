@@ -17,7 +17,7 @@ void ui_ScreenProvisioning_screen_init(void)
     lv_obj_set_y(ui_LabelProvisioningMiddle, -47);
     lv_obj_set_align(ui_LabelProvisioningMiddle, LV_ALIGN_CENTER);
     lv_label_set_text(ui_LabelProvisioningMiddle,
-                      "Bitte geben Sie diesen Apparat\nan die Gemeinde oder einen\nbeauftragten Betreiber!");
+                      "Bitte diesen MERLIN-Messenger\nan die Gemeinde oder einen\nbeauftragten Betreiber geben!");
     lv_obj_set_style_text_align(ui_LabelProvisioningMiddle, LV_TEXT_ALIGN_CENTER, LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_set_style_text_font(ui_LabelProvisioningMiddle, &ui_font_Hack14, LV_PART_MAIN | LV_STATE_DEFAULT);
 
@@ -27,7 +27,7 @@ void ui_ScreenProvisioning_screen_init(void)
     lv_obj_set_x(ui_LabelProvisioningTop, 2);
     lv_obj_set_y(ui_LabelProvisioningTop, -104);
     lv_obj_set_align(ui_LabelProvisioningTop, LV_ALIGN_CENTER);
-    lv_label_set_text(ui_LabelProvisioningTop, "Apparat muss eingerichtet werden");
+    lv_label_set_text(ui_LabelProvisioningTop, "MERLIN-Messenger nicht eingerichtet");
     lv_obj_set_style_text_color(ui_LabelProvisioningTop, lv_color_hex(0x00D0FE), LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_set_style_text_opa(ui_LabelProvisioningTop, 255, LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_set_style_text_font(ui_LabelProvisioningTop, &ui_font_Hack14, LV_PART_MAIN | LV_STATE_DEFAULT);
@@ -39,7 +39,7 @@ void ui_ScreenProvisioning_screen_init(void)
     lv_obj_set_y(ui_LabelProvisioningBottom, 55);
     lv_obj_set_align(ui_LabelProvisioningBottom, LV_ALIGN_CENTER);
     lv_label_set_text(ui_LabelProvisioningBottom,
-                      "Dieser Pager kann erst verwendet\nwerden, wenn von zentraler Stelle\nalle grundlegenden Einstellungen\nneu vorgenommen worden sind.\n\nDie aktuelle Einsatzbereitschaft \nist stark begrenzt.");
+                      "Dieser MERLIN-Messenger kann erst\nverwendet werden, wenn von zentraler\nStelle grundlegende Einstellungen\nneu vorgenommen worden sind.\n\nDie aktuelle Einsatzbereitschaft \nist stark begrenzt.");
     lv_obj_set_style_text_align(ui_LabelProvisioningBottom, LV_TEXT_ALIGN_CENTER, LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_set_style_text_font(ui_LabelProvisioningBottom, &ui_font_Hack12, LV_PART_MAIN | LV_STATE_DEFAULT);
 

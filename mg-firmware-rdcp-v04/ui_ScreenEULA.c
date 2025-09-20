@@ -17,7 +17,7 @@ void ui_ScreenEULA_screen_init(void)
     lv_obj_set_y(ui_LabelMaintenanceMiddle1, -5);
     lv_obj_set_align(ui_LabelMaintenanceMiddle1, LV_ALIGN_CENTER);
     lv_label_set_text(ui_LabelMaintenanceMiddle1,
-                      "Bitte nutzen Sie zur Kommunikation mit der Gemeinde und Rettungsdiensten \nimmer Telefon, Mobilfunk oder Internet, \nsoweit diese noch funktionieren.\n\nDieser Pager dient der Anzeige amtlicher Kurzmitteilungen und kann nur im Krisenfall genutzt werden, um kurze Nachrichten an den Krisenstab der Gemeinde zu schicken.\nEr sollte dazu nur verwendet werden, wenn die restliche Kommunikationsinfrastruktur ausgefallen ist oder nicht genutzt werden kann.");
+                      "Bitte nutzen Sie zur Kommunikation mit der Gemeinde und Rettungsdiensten \nimmer Telefon, Mobilfunk oder Internet, \nsoweit diese noch funktionieren.\n\nDieser MERLIN-Messenger dient der Anzeige amtlicher Kurzmitteilungen und kann nur im Krisenfall genutzt werden, um kurze Nachrichten an den Krisenstab der Gemeinde zu schicken.\nEr sollte dazu nur verwendet werden, wenn die restliche Kommunikationsinfrastruktur ausgefallen ist oder nicht genutzt werden kann.");
     lv_obj_set_style_text_align(ui_LabelMaintenanceMiddle1, LV_TEXT_ALIGN_CENTER, LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_set_style_text_font(ui_LabelMaintenanceMiddle1, &lv_font_montserrat_12, LV_PART_MAIN | LV_STATE_DEFAULT);
 
