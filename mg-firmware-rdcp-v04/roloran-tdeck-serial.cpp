@@ -24,6 +24,7 @@ int64_t  simrx_timestamp = 0;
 extern   bool repeater_mode;
 extern   bool hq_mode;
 extern   uint8_t corridor_seconds;
+extern   uint8_t sf_multiplier;
 
 bool pre_banner_mode = true;
 String SERIAL_NOTE = "";
@@ -412,6 +413,16 @@ void serial_process_command(String s, String processing_mode, bool persist_selec
 	    serial_writeln("INFO: Changed this device's LoRa preamble length to " + String(getMyLoRaPreambleLength()));
       if (persist_selected_commands) persist_serial_command_for_replay(s);
     }
+    else if (s_uppercase.startsWith("RDCPSFMUL "))
+    {
+      String p1 = s.substring(10);
+      char buffer[32];
+      p1.toCharArray(buffer, 32);
+      uint16_t new_value = strtol(buffer, NULL, 10);
+      sf_multiplier = new_value;
+      serial_writeln("INFO: Changed RDCP SF multiplier to " + p1);
+      if (persist_selected_commands) persist_serial_command_for_replay(s);
+    }    
     else if (s_uppercase.startsWith("TX "))
     {
       String p1 = s.substring(3);

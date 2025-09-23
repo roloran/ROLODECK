@@ -40,6 +40,7 @@ uint8_t most_recent_future_timeslots = 0;
 
 extern   bool hq_mode;
 uint8_t  corridor_seconds = 10; // number of seconds to add to CFEst if hearing a CIRE to let DA ACKs come through
+uint8_t  sf_multiplier = 1;
 
 uint8_t cire_retry = 0;     // How often did we already try to send a CIRE?
 int64_t cire_starttime = NO_TIMESTAMP; // When was the CIRE sent?
@@ -1550,7 +1551,7 @@ void rdcp_callback_txfin(void)
     // When we finished transmitting, others expect the channel to be free
     // and might want to start sending urgent messages. Thus, as we just used
     // the channel for ourselves for some time, give them a chance.
-    rdcp_txqueue_reschedule(random(10000, 20000));
+    rdcp_txqueue_reschedule(random(1000 * sf_multiplier, 2000 * sf_multiplier));
   }
 
   return;
@@ -1591,7 +1592,7 @@ bool rdcp_callback_cad(bool cad_busy)
     lora_radio_receivemode();
     txq.entries[tx_ongoing].in_process = false;
     tx_ongoing = -1;
-    int64_t random_delay = random(21000, 25001);
+    int64_t random_delay = random(2100 * sf_multiplier, 2500 * sf_multiplier);
     rdcp_txqueue_reschedule(random_delay);
     if (CFEst < my_millis() + random_delay) CFEst = my_millis() + random_delay; // Don't re-schedule twice
   }
@@ -1604,7 +1605,7 @@ bool rdcp_callback_cad(bool cad_busy)
     lora_radio_receivemode();
     txq.entries[tx_ongoing].in_process = false;
     tx_ongoing = -1;
-    int64_t random_delay = random(31000, 35001);
+    int64_t random_delay = random(3100 * sf_multiplier, 3500 * sf_multiplier);
     rdcp_txqueue_reschedule(random_delay);
     if (CFEst < my_millis() + random_delay) CFEst = my_millis() + random_delay; // Don't re-schedule twice
   }
