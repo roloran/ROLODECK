@@ -169,7 +169,10 @@ Provisioned devices dump parts of their configuration (e.g., LoRa parameters, RD
   - `UNLOCK` changes the Serial/UART access mode based on a given password, e.g., `UNLOCK nicetry`. The higher the unlocked level the more information will be output via Serial/UART and the more commands can be used. Repeated failed unlock attempts may brick the device. Passwords can be set with the `UNLOCKHASH1` and `UNLOCKHASH2` commands.
   - `RINGTONE 0` disables the short melody when new messages are displayed.
   - `NOTE` can be used to add an infix to each Serial output text line.
-  - `MISTAKESWEREMADE` bricks the device. 
+  - `MISTAKESWEREMADE` bricks the device.
+  - `RDCPSFMUL n` sets the RDCP spreading-factor-based time multiplier, e.g., 1 for SF7 and 10 for SF12.
+  - `CORRIDOR 60` sets the corridor time in seconds, i.e., how long to keep the channel free after hearing a `CIRE` to make room for the `DA` `ACK`.
+  - `HQMODE` toggles the device's HQ mode. The ROLODECK devices used for `HQ` devices should enable this mode to facilitate the `HQ` software regarding channel free estimations.
 
 Some of those commands are automatically persisted on the device and replayed after power-on, so they don't have to be repeated every time the device is used. Those replayed commands override even `BASECFG` settings. Using `!` as a prefix for the command prevents it from being echoed back.
 
