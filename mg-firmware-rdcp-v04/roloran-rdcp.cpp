@@ -290,7 +290,7 @@ void rdcp_repeater(void)
 
   /* Do not repeat the following message types */
   if (
-    (rdcp_msg_in.header.message_type == RDCP_MSGTYPE_DA_STATUS_REQUEST) ||
+    // (rdcp_msg_in.header.message_type == RDCP_MSGTYPE_DA_STATUS_REQUEST) || // useful for HQs in need of a repeater
     (rdcp_msg_in.header.message_type == RDCP_MSGTYPE_DA_STATUS_RESPONSE) ||
     (rdcp_msg_in.header.message_type == RDCP_MSGTYPE_DELIVERY_RECEIPT) || 
     (rdcp_msg_in.header.message_type == RDCP_MSGTYPE_FETCH_ALL_NEW_MESSAGES) ||
@@ -387,7 +387,7 @@ bool rdcp_mg_process_rxed_lora_packet(uint8_t *lora_packet, uint16_t lora_packet
   for (int i=0; i < MAX_TXQUEUE_ENTRIES; i++) txq.entries[i].cad_retry = 0;
   if (tx_ongoing != -1)
   {
-    serial_writeln("INFO: Freezing current transmission due to LoRa packet reception");
+    serial_writeln("INFO: Freezing current transmission due to RDCP message reception");
     txq.entries[tx_ongoing].in_process = false;
     tx_ongoing = -1;
   }
@@ -433,11 +433,11 @@ bool rdcp_mg_process_rxed_lora_packet(uint8_t *lora_packet, uint16_t lora_packet
           )
         ) return false;
       
-      /* Don't accept duplicate OAs/Signatures after longer uptime to improve device responsiveness */
+      /* Don't accept duplicate OAs/Signatures after longer uptime or in HQ mode to improve device responsiveness */
       if ((rdcp_msg_in.header.message_type == RDCP_MSGTYPE_OFFICIAL_ANNOUNCEMENT) || 
           (rdcp_msg_in.header.message_type == RDCP_MSGTYPE_SIGNATURE))
       {
-        if (my_millis() > 120 * MINUTES_TO_MILLISECONDS) return false;
+        if ((my_millis() > 120 * MINUTES_TO_MILLISECONDS) || hq_mode) return false;
       }
     }
   }
@@ -556,6 +556,7 @@ void rdcp_update_channel_free_estimator_rx(void)
   uint32_t timeslot_duration = (nrt+1) * airtime_with_buffer;
 
   uint8_t future_timeslots = 0;
+  bool consider_fixed_offset = false; // Count in Relays' fixed forwarding delay
 
   if ((rdcp_msg_in.header.sender < RDCP_ADDRESS_MG_LOWERBOUND) && (rdcp_msg_in.header.sender >= RDCP_ADDRESS_BBKDA_LOWERBOUND))
   { // DA or BBK sending
@@ -585,7 +586,16 @@ void rdcp_update_channel_free_estimator_rx(void)
     if (rdcp_msg_in.header.relay1 == 0xE2) future_timeslots = 3;
     if (rdcp_msg_in.header.relay1 == 0xE1) future_timeslots = 2;
     if (rdcp_msg_in.header.relay1 == 0xE0) future_timeslots = 1;
-    if (rdcp_msg_in.header.relay1 == 0xEE) future_timeslots = 0;
+    if (rdcp_msg_in.header.relay1 == 0xEE) future_timeslots = 0; // also RDCP-Relay default on 868 MHz
+
+    if (hq_mode && (future_timeslots == 0))
+    { 
+      // As HQ RDCP modem on 868 MHz, we recommend to keep the channel free until DAs
+      // has their timeslot to forward new messages to MGs in their area
+      uint8_t sending_relay_id = rdcp_msg_in.header.sender & 0x0F;
+      future_timeslots = OUR_NUM_RELAYS - sending_relay_id - 1;
+      consider_fixed_offset = true;
+    }
   }
   else
   { // other device sending, not leading to relay on same channel
@@ -593,6 +603,7 @@ void rdcp_update_channel_free_estimator_rx(void)
   }
 
   uint32_t channel_free_after = remaining_current_sender_time + future_timeslots * timeslot_duration;
+  if (consider_fixed_offset) channel_free_after += 5 * SECONDS_TO_MILLISECONDS; // Relay forwarding delay
   int64_t channel_free_at = my_millis() + channel_free_after;
 
   most_recent_future_timeslots = future_timeslots;
@@ -906,6 +917,8 @@ void rdcp_mg_process_incoming_message(bool is_duplicate)
 {
   /* Handle rdcp_msg_in depending on its RDCP Message Type and Destination. */
   /* It is known to be a valid (correct checksum), new (non-duplicate) RDCP Message. */
+
+  if (hq_mode) return; // do not process incoming RDCP messages any further in HQ mode at all
 
   uint8_t  mt   = rdcp_msg_in.header.message_type;
   uint16_t dest = rdcp_msg_in.header.destination;
@@ -2136,7 +2149,7 @@ void rdcp_heartbeat_check(void)
 {
   int64_t now = my_millis();
 
-  if (heartbeat_interval == 0) return; // sending heartbeats disabled
+  if (hq_mode || (heartbeat_interval == 0)) return; // sending heartbeats disabled
 
   if (now <= initial_grace_period) return;
 

@@ -7,6 +7,8 @@
 #define OUR_RDCP_ADDRESS_DA_MOTSCHULA  0x0203
 #define OUR_RDCP_ADDRESS_DA_PUDLACH    0x0204
 
+#define OUR_NUM_RELAYS 10
+
 // Buffer time in ms for each sending/relaying timeslot
 #define OUR_RDCP_TIMESLOT_BUFFER 1000
 

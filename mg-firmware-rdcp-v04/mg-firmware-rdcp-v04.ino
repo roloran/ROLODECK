@@ -57,6 +57,7 @@ int64_t  lora_packet_timestamp = 0;
 
 bool provisioned = false; // has the device already been provisioned?
 extern bool has_txed;
+extern bool hq_mode;
 
 int64_t minutetimer = -1; // track milliseconds so we execute some tasks only about once per minute
 int32_t old_free_heap = ESP.getFreeHeap();
@@ -111,29 +112,37 @@ void loop(void)
       delay(200);
       set_gui_needs_screen_refresh(true);
       tdeck_loop();
-      if (shall_show_eula())
+      if (!hq_mode)
       {
-        serial_writeln("INFO: Showing EULA screen");
-        gui_transition_to_screen(SCREEN_EULA); // Default screen on start-up
+        if (shall_show_eula())
+        {
+          serial_writeln("INFO: Showing EULA screen");
+          gui_transition_to_screen(SCREEN_EULA); // Default screen on start-up
+        }
+        else
+        {
+          serial_writeln("INFO: Skipping EULA screen");
+          gui_transition_to_screen(SCREEN_OACRISIS); // Directly go to OA CRISIS screen if no EULA is shown
+        }
       }
-      else
+      else 
       {
-        serial_writeln("INFO: Skipping EULA screen");
-        gui_transition_to_screen(SCREEN_OACRISIS); // Directly go to OA CRISIS screen if no EULA is shown
+        serial_writeln("INFO: Sticking to SPLASH screen in HQ mode");
+        gui_transition_to_screen(SCREEN_SPLASH);
       }
       set_gui_needs_screen_refresh(true);
       tdeck_loop();
       serial_banner();  // Output current device configuration over Serial
-      mb_count_and_show_last(true, true); // Display latest message board entry if available
+      if (!hq_mode) mb_count_and_show_last(true, true); // Display latest message board entry if available
       tdeck_loop();
-      mb_check_lifetime_and_update_display(true, true); // Check expiration dates
+      if (!hq_mode) mb_check_lifetime_and_update_display(true, true); // Check expiration dates
     }
     else
     {
       gui_transition_to_screen(SCREEN_PROVISIONING);  // Default screen if device has not yet been provisioned
     }
 
-    rdcp_check_cirefile(); // Send any persisted CIRE if we lost power before having it ACK'd or given up
+    if (!hq_mode) rdcp_check_cirefile(); // Send any persisted CIRE if we lost power before having it ACK'd or given up
   }
 
   tdeck_loop(); // Periodically let the GUI do its work
@@ -170,14 +179,14 @@ void loop(void)
   tdeck_loop();           // Periodically let the GUI do its work (yes, again)
   rdcp_txqueue_loop();    // Periodically let the TX scheduler do its work
   tdeck_loop();           // Periodically let the GUI do its work (once more...)
-  rdcp_cire_check();      // Check for timeouts of sent CIRE messages, i.e., no ACKs received from DA or HQ
-  rdcp_heartbeat_check(); // Check whether we should send a HEARTBEAT message
+  if (!hq_mode) rdcp_cire_check();      // Check for timeouts of sent CIRE messages, i.e., no ACKs received from DA or HQ
+  if (!hq_mode) rdcp_heartbeat_check(); // Check whether we should send a HEARTBEAT message
 
   if ((minutetimer == -1) || (my_millis() > minutetimer + 5 * MINUTES_TO_MILLISECONDS)) // execute initially and roughly once every five minutes
   {
     minutetimer = my_millis();
-    if (is_screensaver_on()) mb_check_lifetime_and_update_display(true, true); // lifetime check blocks device for several seconds, only do it with screensaver on
-    rdcp_blockdevice_check();
+    if (is_screensaver_on() && !hq_mode) mb_check_lifetime_and_update_display(true, true); // lifetime check blocks device for several seconds, only do it with screensaver on
+    if (!hq_mode) rdcp_blockdevice_check();
 
     rdcp_dump_queues();
 
