@@ -2124,7 +2124,7 @@ void rdcp_heartbeat_send(void)
 
   rm.payload.data[0] = highest_oa_refnr % 256;
   rm.payload.data[1] = highest_oa_refnr / 256;
-  uint16_t roam = getRoamingRecommendation(15*MINUTES_TO_MILLISECONDS);
+  uint16_t roam = getRoamingRecommendation(5*MINUTES_TO_MILLISECONDS);
   rm.payload.data[2] = roam % 256;
   rm.payload.data[3] = roam / 256;
 

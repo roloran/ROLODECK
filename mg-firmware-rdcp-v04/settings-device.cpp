@@ -108,7 +108,7 @@ uint16_t getEntryPoint(uint8_t num)
 
 uint16_t getSuggestedRelay(uint8_t retry=0)
 {
-  uint16_t roam = getRoamingRecommendation(MINUTES_TO_MILLISECONDS*15);
+  uint16_t roam = getRoamingRecommendation(MINUTES_TO_MILLISECONDS*5);
   if ((retry == 0) && (roam != RDCP_NO_ADDRESS)) return roam;
   uint8_t index = 0;
   uint16_t da = getEntryPoint(index);
@@ -281,7 +281,7 @@ void updateRoamingTable(uint16_t da, int16_t rssi)
   return;
 }
 
-uint16_t getRoamingRecommendation(uint32_t timeframe = MINUTES_TO_MILLISECONDS*15)
+uint16_t getRoamingRecommendation(uint32_t timeframe = MINUTES_TO_MILLISECONDS*5)
 {
   int index = -1;
   int64_t now = my_millis();
