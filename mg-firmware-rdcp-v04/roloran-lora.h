@@ -137,6 +137,12 @@ char *get_current_rdcp_msg_base64(void);
  */
 void set_current_rdcp_msg_base64(char *m64);
 
+/**
+ * Switch channel on T-Deck radio.
+ * @param channel Channel to switch to, either CHANNEL868DA or CHANNEL868MG
+ */
+void radio_switch_channel(uint8_t channel);
+
 #endif
 
 /* EOF */

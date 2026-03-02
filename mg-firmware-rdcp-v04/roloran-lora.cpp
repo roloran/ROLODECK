@@ -183,6 +183,64 @@ void radio_apply_new_configuration(void)
   radio_setup();
 }
 
+void radio_switch_channel(uint8_t channel)
+{
+  digitalWrite(TDECK_TFT_CS, HIGH);
+  delay(1);
+  digitalWrite(TDECK_RADIO_CS, LOW);
+  delay(1);
+	Radio.Standby();
+
+  uint32_t freq = channel == CHANNEL868DA ? getMyLoRaFrequency() : getMyLoRaFrequencyTX();
+  freq = freq * 1000 * 1000;
+	Radio.SetChannel(freq);
+
+  uint8_t sw = channel == CHANNEL868DA ? getMyLoRaSyncWord() : getMyLoRaSyncWordTX();
+  if (sw != 0x34)
+  {
+    Radio.SetPublicNetwork(false);
+  }
+  else
+  {
+    Radio.SetPublicNetwork(true);
+  }
+
+  uint8_t TX_OUTPUT_POWER = channel == CHANNEL868DA ? getMyLoRaPower() : getMyLoRaPowerTX();
+  uint8_t LORA_BANDWIDTH = 0;
+  uint8_t lbw = channel == CHANNEL868DA ? getMyLoRaBandwidth() : getMyLoRaBandwidthTX();
+  if (lbw == 250.0) LORA_BANDWIDTH = 1;
+  if (lbw == 500.0) LORA_BANDWIDTH = 2;
+  uint8_t LORA_SPREADING_FACTOR = channel == CHANNEL868DA ? getMyLoRaSpreadingFactor() : getMyLoRaSpreadingFactorTX();
+  uint8_t LORA_CODINGRATE = channel == CHANNEL868DA ? getMyLoRaCodingRate() - 4 : getMyLoRaCodingRateTX() - 4;
+  uint8_t LORA_PREAMBLE_LENGTH = channel == CHANNEL868DA ? getMyLoRaPreambleLength() : getMyLoRaPreambleLengthTX();
+
+  uint8_t  LORA_SYMBOL_TIMEOUT = 0;
+  bool     LORA_FIX_LENGTH_PAYLOAD_ON = false;
+  bool     LORA_IQ_INVERSION_ON = false;
+  uint16_t TX_TIMEOUT_VALUE = 30 * SECONDS_TO_MILLISECONDS;
+
+	Radio.SetTxConfig(MODEM_LORA, TX_OUTPUT_POWER, 0, LORA_BANDWIDTH,
+	                  LORA_SPREADING_FACTOR, LORA_CODINGRATE,
+	                  LORA_PREAMBLE_LENGTH, LORA_FIX_LENGTH_PAYLOAD_ON,
+	                  true, 0, 0, LORA_IQ_INVERSION_ON, TX_TIMEOUT_VALUE);
+
+	Radio.SetRxConfig(MODEM_LORA, LORA_BANDWIDTH, LORA_SPREADING_FACTOR,
+	                  LORA_CODINGRATE, 0, LORA_PREAMBLE_LENGTH,
+	                  LORA_SYMBOL_TIMEOUT, LORA_FIX_LENGTH_PAYLOAD_ON,
+	                  0, true, 0, 0, LORA_IQ_INVERSION_ON, true);
+
+  RadioEvents.TxDone    = OnTxDone;
+	RadioEvents.RxDone    = OnRxDone;
+	RadioEvents.TxTimeout = OnTxTimeout;
+	RadioEvents.RxTimeout = OnRxTimeout;
+	RadioEvents.RxError   = OnRxError;
+	RadioEvents.CadDone   = OnCadDone;
+
+  startReceiveMode();
+
+  return;
+}
+
 char current_rdcp_msg_base64[FATLEN];           // Base64-encoded version of currently processed message
 char *get_current_rdcp_msg_base64(void) { return current_rdcp_msg_base64; }
 void set_current_rdcp_msg_base64(char *m64)

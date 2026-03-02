@@ -7,9 +7,9 @@
  * Firmware version information and other constant data
  */
 
-#define FW_SCENARIO   "Neuhaus v2.0"
+#define FW_SCENARIO   "Neuhaus 2026"
 #define FW_RDCP       "v0.4"
-#define FW_VERSION    "001"
+#define FW_VERSION    "002"
 
 #define SERIAL_PREFIX "T-DECK: "
 
@@ -27,71 +27,85 @@ void     setMyRDCPAddress(uint16_t rdcp_address);
  * @return This device's LoRa channel frequency in MHz
  */
 float    getMyLoRaFrequency(void);
+float    getMyLoRaFrequencyTX(void);
 
 /**
  * @return This device's LoRa channel bandwidth in KHz 
  */
 float    getMyLoRaBandwidth(void);
+float    getMyLoRaBandwidthTX(void);
 
 /**
  * @return This device's currently used LoRa spreading factor 
  */
 uint8_t  getMyLoRaSpreadingFactor(void);
+uint8_t  getMyLoRaSpreadingFactorTX(void);
 
 /**
  * @return This device's currently used LoRa coding rate (5--8 as in RadioLib)
  */
 int      getMyLoRaCodingRate(void);
+int      getMyLoRaCodingRateTX(void);
 
 /**
  * @return This device's currently used LoRa SyncWord
  */
 uint8_t  getMyLoRaSyncWord(void);
+uint8_t  getMyLoRaSyncWordTX(void);
 
 /**
  * @return This device's currently used TX power in dBm
  */
 int      getMyLoRaPower(void);
+int      getMyLoRaPowerTX(void);
 
 /**
  * @return This device's currently used LoRa preamble length
  */
 uint16_t getMyLoRaPreambleLength(void);
+uint16_t getMyLoRaPreambleLengthTX(void);
 
 /**
  * @param freq_in_mhz LoRa channel frequency to use in MHz 
  */
 void     setMyLoRaFrequency(float freq_in_mhz);
+void     setMyLoRaFrequencyTX(float freq_in_mhz);
 
 /**
  * @param bandwidth_in_khz LoRa channel bandwidth to use in KHz 
  */
 void     setMyLoRaBandwidth(float bandwidth_in_khz);
+void     setMyLoRaBandwidthTX(float freq_in_mhz);
 
 /**
  * @param sf LoRa spreading factor to use (7--12)
  */
 void     setMyLoRaSpreadingFactor(uint8_t sf);
+void     setMyLoRaSpreadingFactorTX(uint8_t sf);
 
 /**
  * @param cr LoRa coding rate to use (5--8, as in RadioLib)
  */
 void     setMyLoRaCodingRate(int cr);
+void     setMyLoRaCodingRateTX(int cr);
 
 /**
  * @param syncword LoRa syncword to use (0x12 or 0x34)
  */
 void     setMyLoRaSyncWord(uint8_t syncword);
+void     setMyLoRaSyncWordTX(uint8_t syncword);
 
 /**
  * @param power LoRa TX power to use in dBm (usually 0--22)
  */
 void     setMyLoRaPower(int power);
+void     setMyLoRaPowerTX(int power);
 
 /**
  * @param preamble_length LoRa preamble length to use (usually 15 in our scenarios)
  */
 void     setMyLoRaPreambleLength(uint16_t preamble_length);
+void     setMyLoRaPreambleLengthTX(uint16_t preamble_length);
 
 /**
  * @return Number of milliseconds until the screensaver should activate when idle 

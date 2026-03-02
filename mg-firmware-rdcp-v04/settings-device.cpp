@@ -21,13 +21,21 @@ uint16_t MY_MULTICAST_ADDRESSES[] = {0,0,0,0,0};
 /**
  * Settings that should be the same for all devices in a scenario
  */
-float    MY_LORA_FREQ = 868.2;         //< LoRa Frequency in MHz
+float    MY_LORA_FREQ = 869.525;       //< LoRa Frequency in MHz
 float    MY_LORA_BW = 125.0;           //< LoRa Bandwidth
-uint8_t  MY_LORA_SF = 12;              //< LoRa Spreading Factor
+uint8_t  MY_LORA_SF = 7;               //< LoRa Spreading Factor
 int      MY_LORA_CR = 5;               //< LoRa Coding Rate as per RadioLib
 uint8_t  MY_LORA_SW = 0x12;            //< LoRa Short Sync Word
 int      MY_LORA_POWER = 14;           //< LoRa Output Power in dBm, -17 to 22
 uint16_t MY_LORA_PREAMBLE_LENGTH = 15; //< LoRa number of Preamble Symbols
+
+float    MY_LORA_FREQ_TX = 869.0;         //< LoRa Frequency in MHz
+float    MY_LORA_BW_TX = 125.0;           //< LoRa Bandwidth
+uint8_t  MY_LORA_SF_TX = 7;               //< LoRa Spreading Factor
+int      MY_LORA_CR_TX = 5;               //< LoRa Coding Rate as per RadioLib
+uint8_t  MY_LORA_SW_TX = 0x12;            //< LoRa Short Sync Word
+int      MY_LORA_POWER_TX = 14;           //< LoRa Output Power in dBm, -17 to 22
+uint16_t MY_LORA_PREAMBLE_LENGTH_TX = 15; //< LoRa number of Preamble Symbols
 
 uint16_t getMyRDCPAddress(void)                  { return MY_RDCP_ADDRESS; }
 void     setMyRDCPAddress(uint16_t rdcp_address) { MY_RDCP_ADDRESS = rdcp_address; return; }
@@ -47,6 +55,22 @@ void     setMyLoRaCodingRate(int cr)                        { MY_LORA_CR = cr; r
 void     setMyLoRaSyncWord(uint8_t syncword)                { MY_LORA_SW = syncword; return; }
 void     setMyLoRaPower(int power)                          { MY_LORA_POWER = power; return; }
 void     setMyLoRaPreambleLength(uint16_t preamble_length)  { MY_LORA_PREAMBLE_LENGTH = preamble_length; return; }
+
+float    getMyLoRaFrequencyTX(void)       { return MY_LORA_FREQ_TX; }
+float    getMyLoRaBandwidthTX(void)       { return MY_LORA_BW_TX; }
+uint8_t  getMyLoRaSpreadingFactorTX(void) { return MY_LORA_SF_TX; }
+int      getMyLoRaCodingRateTX(void)      { return MY_LORA_CR_TX; }
+uint8_t  getMyLoRaSyncWordTX(void)        { return MY_LORA_SW_TX; }
+int      getMyLoRaPowerTX(void)           { return MY_LORA_POWER_TX; }
+uint16_t getMyLoRaPreambleLengthTX(void)  { return MY_LORA_PREAMBLE_LENGTH_TX; }
+
+void     setMyLoRaFrequencyTX(float freq_in_mhz)              { MY_LORA_FREQ_TX = freq_in_mhz; return; }
+void     setMyLoRaBandwidthTX(float bandwidth_in_khz)         { MY_LORA_BW_TX = bandwidth_in_khz; return; }
+void     setMyLoRaSpreadingFactorTX(uint8_t sf)               { MY_LORA_SF_TX = sf; return; }
+void     setMyLoRaCodingRateTX(int cr)                        { MY_LORA_CR_TX = cr; return; }
+void     setMyLoRaSyncWordTX(uint8_t syncword)                { MY_LORA_SW_TX = syncword; return; }
+void     setMyLoRaPowerTX(int power)                          { MY_LORA_POWER_TX = power; return; }
+void     setMyLoRaPreambleLengthTX(uint16_t preamble_length)  { MY_LORA_PREAMBLE_LENGTH_TX = preamble_length; return; }
 
 uint32_t MY_SCREENSAVER_DELAY = 30000; //< After how many milliseconds should the screensaver turn on?
 uint32_t getScreensaverDelay(void)           { return MY_SCREENSAVER_DELAY; }

@@ -233,6 +233,11 @@ bool rdcp_update_channel_free_estimation(int64_t new_value);
   */
 uint16_t airtime_in_ms(uint8_t payload_size);
 
+#define CHANNEL433   0
+#define CHANNEL868DA 1
+#define CHANNEL868MG 2
+#define CHANNEL868LW 3
+
 /**
   * Add an outgoing RDCP Message to the TX Queue (TXQ).
   * TXQ is used for messages that are up for transmission very soon, unlike the
@@ -242,6 +247,7 @@ uint16_t airtime_in_ms(uint8_t payload_size);
   * or delayed too long. `force_tx` prohibits re-scheduling. The `callback_selector`
   * determines which function is called when the message has been sent including all of
   * its retransmissions. If `force_tx` is used, the `forced_time` should be given. 
+  * @param channel Channel to send on, either CHANNEL868DA or CHANNEL868MG
   * @param data Complete RDCP Message (header+payload) to schedule
   * @param len Length of data (RDCP Message) in bytes
   * @param important True if the message is so important that it must not be dropped even after multiple re-schedules
@@ -250,7 +256,7 @@ uint16_t airtime_in_ms(uint8_t payload_size);
   * @param forced_time Used in combination with force_tx to specify the TX start time
   * @return true if message was accepted, false otherwise (e.g., queue full)
   */
-bool rdcp_txqueue_add(uint8_t *data, uint8_t len, bool important, bool force_tx, uint8_t callback_selector, int64_t forced_time);
+bool rdcp_txqueue_add(uint8_t channel, uint8_t *data, uint8_t len, bool important, bool force_tx, uint8_t callback_selector, int64_t forced_time);
 
 /**
   * Re-schedule the entries in the TX Queue because CFEst has changed meanwhile (offset=0) or by a given offset.
@@ -301,6 +307,7 @@ struct txqueue_entry {
   uint8_t cad_retry = 0;                        //< CAD retry attempt number
   bool waiting = false;                         //< message is still waiting to be sent
   bool in_process = false;                      //< this message is currently being processed
+  uint8_t tx_channel = CHANNEL868MG;
 };
 
 /// Keep the TX Queue small on purpose. We don't want single devices to block the channel for too long.
@@ -318,6 +325,7 @@ struct txqueue {
   * Schedule an outgoing RDCP Message in the "ahead of time" queue.
   * This is intended for intermediate-term scheduling, like sending a SIGNATURE after a corresponding RDCP Message. 
   * Periodic retransmissions should not be added to any queue unless the LoRa channel is considered free currently. 
+  * @param channel CHANNEL868DA or CHANNEL868MG
   * @param data LoRa packet payload (i.e., RDCP Header + RDCP Payload)
   * @param len Length of data in bytes 
   * @param important IMPORTANT if the message must not be dropped, otherwise NOTIMPORTANT 
@@ -326,7 +334,7 @@ struct txqueue {
   * @param delay_in_ms Relative monotonic clock timestamp of when to move the message to the TX queue (in milliseconds)
   * @return true if the message was accepted in the queue, false otherwise (e.g., queue full)
   */
-bool rdcp_txaheadqueue_add(uint8_t *data, uint8_t len, bool important, bool force_tx, uint8_t callback_selector, int64_t delay_in_ms);
+bool rdcp_txaheadqueue_add(uint8_t channel, uint8_t *data, uint8_t len, bool important, bool force_tx, uint8_t callback_selector, int64_t delay_in_ms);
 
 /**
   * Data structure for a TX Ahead Queue entry.
@@ -339,6 +347,7 @@ struct txaheadqueue_entry {
   bool force_tx = false;                        //< indicator whether message should be sent independend of CAD status
   uint8_t callback_selector = TX_CALLBACK_NONE; //< which callback function to use when TX is finished
   bool waiting = false;                         //< message is still waiting to be sent
+  uint8_t tx_channel = CHANNEL868MG;
 };
 
 /// The length of the TX Ahead Queue is larger than the length of the TX Queue. Still, less queued messages is better.

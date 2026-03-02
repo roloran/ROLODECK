@@ -1,6 +1,6 @@
 # ROLORAN Neuhaus Mobile Device Firmware for RDCP v0.4
 
-This repository holds the LilyGo T-Deck firmware implementation for RDCP v0.4 mobile devices (MGs) in the Neuhaus scenario v2.0.
+This repository holds the LilyGo T-Deck firmware implementation for RDCP v0.4 mobile devices (MGs) in the Neuhaus scenario 2026.
 
 The ROLORAN Disaster Communication Protocol (RDCP) is specified in a separate [repository](https://github.com/roloran/RDCP-Specs).
 
@@ -8,7 +8,7 @@ In the Neuhaus scenario, RDCP uses three different kinds of RDCP-capable devices
 
 The RDCP firmware enables citizens to receive RDCP Official Announcements during crisis situations and also send RDCP Citizen Reports, including medical emergencies that trigger emergency aid via the HQ using the DAs in the RDCP Infrastructure as Relays.
 
-The firmware in this repository is the prototype RDCP MG implementation for the Neuhaus scenario, initially deployed for field testing in the second phase of the ROLORAN-Neuhaus cooperation in 2025. It might serve as a blueprint basis for further development and deployments in comparable RDCP scenarios.
+The firmware in this repository is the prototype RDCP MG implementation for the Neuhaus scenario, initially deployed for field testing in the third phase of the ROLORAN-Neuhaus cooperation in 2026. It might serve as a blueprint basis for further development and deployments in comparable RDCP scenarios.
 
 ## Dependencies, Compilation, and Flashing
 
@@ -127,6 +127,13 @@ Provisioned devices dump parts of their configuration (e.g., LoRa parameters, RD
   - `LORASW` sets the LoRa syncword (hexadecimal), e.g., `LORASW 12` (accepted values: 12 and 34)
   - `LORAPW` sets the LoRa TX power, e.g., `LORAPW 14` (accepted values: up to 22 with T-Deck's SX1262)
   - `LORAPL` sets the LoRa preamble length, e.g., `LORAPL 15` (15 is the default value in our scenarios)
+  - `LORAFREQTX` sets the LoRa TX channel frequency in MHz, e.g., `LORAFREQTX 868.2`
+  - `LORABWTX` sets the LoRa TX channel bandwidth in KHz, e.g., `LORABWTX 125`
+  - `LORASFTX` sets the LoRa TX channel spreading factor, e.g., `LORASFTX 12` (accepted values: 7 to 12)
+  - `LORACRTX` sets the LoRa TX channel coding rate to x/8, e.g., `LORACRTX 5` (accepted values: 5 to 8, as in RadioLib)
+  - `LORASWTX` sets the LoRa TX channel syncword (hexadecimal), e.g., `LORASWTX 12` (accepted values: 12 and 34)
+  - `LORAPWTX` sets the LoRa TX channel power, e.g., `LORAPWTX 14` (accepted values: up to 22 with T-Deck's SX1262)
+  - `LORAPLTX` sets the LoRa TX channel preamble length, e.g., `LORAPLTX 15` (15 is the default value in our scenarios)
 
 - `TX <base64>` queues an outgoing RDCP message provided as Base64-encoded string.
 

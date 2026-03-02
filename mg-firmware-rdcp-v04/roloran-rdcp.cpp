@@ -345,7 +345,7 @@ void rdcp_repeater(void)
   memcpy(&data, &rm.header, RDCP_HEADER_SIZE);
   for (int i=0; i<rm.header.rdcp_payload_length; i++) 
     data[i + RDCP_HEADER_SIZE] = rm.payload.data[i];
-  rdcp_txqueue_add(data, RDCP_HEADER_SIZE + rm.header.rdcp_payload_length, 
+  rdcp_txqueue_add(CHANNEL868DA, data, RDCP_HEADER_SIZE + rm.header.rdcp_payload_length, 
                    NOTIMPORTANT, NOTFORCEDTX, TX_CALLBACK_NONE, TX_WHEN_CF);
 
   return;
@@ -397,7 +397,7 @@ bool rdcp_mg_process_rxed_lora_packet(uint8_t *lora_packet, uint16_t lora_packet
   }
 
   /* Ignore roaming beacons sent by DAs for further processing (already used for updating the roaming table above) */
-  if (rdcp_msg_in.header.message_type == RDCP_MSGTYPE_ROAMING_BEACON) return;
+  if (rdcp_msg_in.header.message_type == RDCP_MSGTYPE_ROAMING_BEACON) return true;
 
   print_rdcp_csv();
 
@@ -676,7 +676,7 @@ void rdcp_mg_send_echo_response(uint16_t desta)
   rdcp_mg_fill_outgoing_header(&rm);
 
   memcpy(&data, &rm.header, RDCP_HEADER_SIZE);
-  rdcp_txqueue_add(data, RDCP_HEADER_SIZE, NOTIMPORTANT, NOTFORCEDTX, TX_CALLBACK_NONE, TX_WHEN_CF);
+  rdcp_txqueue_add(CHANNEL868MG, data, RDCP_HEADER_SIZE, NOTIMPORTANT, NOTFORCEDTX, TX_CALLBACK_NONE, TX_WHEN_CF);
   return;
 }
 
@@ -696,7 +696,7 @@ void rdcp_mg_send_echo_request(uint16_t desta)
   rdcp_mg_fill_outgoing_header(&rm);
 
   memcpy(&data, &rm.header, RDCP_HEADER_SIZE);
-  rdcp_txqueue_add(data, RDCP_HEADER_SIZE, NOTIMPORTANT, NOTFORCEDTX, TX_CALLBACK_NONE, TX_WHEN_CF);
+  rdcp_txqueue_add(CHANNEL868MG, data, RDCP_HEADER_SIZE, NOTIMPORTANT, NOTFORCEDTX, TX_CALLBACK_NONE, TX_WHEN_CF);
   return;
 }
 
@@ -721,7 +721,7 @@ void rdcp_mg_send_test_message(uint16_t desta, String m)
 
   memcpy(&data, &rm.header, RDCP_HEADER_SIZE);
   for (int i=0; i<rm.header.rdcp_payload_length; i++) data[i + RDCP_HEADER_SIZE] = rm.payload.data[i];
-  rdcp_txqueue_add(data, RDCP_HEADER_SIZE + rm.header.rdcp_payload_length, NOTIMPORTANT, NOTFORCEDTX, TX_CALLBACK_NONE, TX_WHEN_CF);
+  rdcp_txqueue_add(CHANNEL868MG, data, RDCP_HEADER_SIZE + rm.header.rdcp_payload_length, NOTIMPORTANT, NOTFORCEDTX, TX_CALLBACK_NONE, TX_WHEN_CF);
 
   return;
 }
@@ -802,7 +802,7 @@ void rdcp_send_timestamp(uint8_t year, uint8_t month, uint8_t day, uint8_t hour,
   uint8_t data[DATABUFLEN];
   memcpy(&data, &rm.header, RDCP_HEADER_SIZE);
   for (int i=0; i<rm.header.rdcp_payload_length; i++) data[i + RDCP_HEADER_SIZE] = rm.payload.data[i];
-  rdcp_txqueue_add(data, RDCP_HEADER_SIZE + rm.header.rdcp_payload_length, NOTIMPORTANT, NOTFORCEDTX, TX_CALLBACK_NONE, TX_WHEN_CF);
+  rdcp_txqueue_add(CHANNEL868MG, data, RDCP_HEADER_SIZE + rm.header.rdcp_payload_length, NOTIMPORTANT, NOTFORCEDTX, TX_CALLBACK_NONE, TX_WHEN_CF);
 
   return;
 }
@@ -999,7 +999,7 @@ int get_num_txaq_entries(void)
 
 uint8_t txq_overrun_counter = 0;
 
-bool rdcp_txqueue_add(uint8_t *data, uint8_t len, bool important, bool force_tx, uint8_t callback_selector, int64_t forced_time=0)
+bool rdcp_txqueue_add(uint8_t channel, uint8_t *data, uint8_t len, bool important, bool force_tx, uint8_t callback_selector, int64_t forced_time=0)
 {
   char info[INFOLEN];
   int64_t now = my_millis();
@@ -1044,6 +1044,7 @@ bool rdcp_txqueue_add(uint8_t *data, uint8_t len, bool important, bool force_tx,
     if (txq.entries[i].waiting == false)
     {
       txq.num_entries += 1;
+      txq.entries[i].tx_channel = channel;
       txq.entries[i].waiting = true;
       txq.entries[i].in_process = false;
       txq.entries[i].timeslot_duration = rdcp_get_timeslot_duration(data);
@@ -1322,7 +1323,7 @@ bool rdcp_txqueue_loop(void)
   return true;
 }
 
-bool rdcp_txaheadqueue_add(uint8_t *data, uint8_t len, bool important, bool force_tx, uint8_t callback_selector, int64_t delay_in_ms)
+bool rdcp_txaheadqueue_add(uint8_t channel, uint8_t *data, uint8_t len, bool important, bool force_tx, uint8_t callback_selector, int64_t delay_in_ms)
 {
   if (txaq.num_entries == MAX_TXAHEADQUEUE_ENTRIES)
   {
@@ -1337,6 +1338,7 @@ bool rdcp_txaheadqueue_add(uint8_t *data, uint8_t len, bool important, bool forc
     if (txaq.entries[i].waiting == false)
     {
       txaq.num_entries += 1;
+      txaq.entries[i].tx_channel = channel;
       txaq.entries[i].waiting = true;
       txaq.entries[i].callback_selector = callback_selector;
       txaq.entries[i].force_tx = force_tx;
@@ -1369,7 +1371,7 @@ bool rdcp_txaheadqueue_loop(void)
   {
     if ((txaq.entries[i].waiting == true) && (txaq.entries[i].scheduled_time <= now))
     {
-      if (rdcp_txqueue_add(txaq.entries[i].payload, txaq.entries[i].payload_length, txaq.entries[i].important, txaq.entries[i].force_tx, txaq.entries[i].callback_selector, txaq.entries[i].scheduled_time) == true)
+      if (rdcp_txqueue_add(txaq.entries[i].tx_channel, txaq.entries[i].payload, txaq.entries[i].payload_length, txaq.entries[i].important, txaq.entries[i].force_tx, txaq.entries[i].callback_selector, txaq.entries[i].scheduled_time) == true)
       {
         txaq.entries[i].waiting = false;
         txaq.num_entries--;
@@ -1407,15 +1409,15 @@ bool rdcp_tx_interface(String b64rdcpmsg, int64_t time=TX_WHEN_CF, uint8_t chann
 
   if (time == TX_WHEN_CF)
   {
-    rdcp_txqueue_add(outgoing_message, decoded_length, IMPORTANT, NOTFORCEDTX, TX_CALLBACK_NONE, NO_FORCED_TIME);
+    rdcp_txqueue_add(CHANNEL868MG, outgoing_message, decoded_length, IMPORTANT, NOTFORCEDTX, TX_CALLBACK_NONE, NO_FORCED_TIME);
   }
   else if (time == TX_IMMEDIATELY)
   {
-    rdcp_txqueue_add(outgoing_message, decoded_length, IMPORTANT, FORCEDTX, TX_CALLBACK_NONE, now);
+    rdcp_txqueue_add(CHANNEL868MG, outgoing_message, decoded_length, IMPORTANT, FORCEDTX, TX_CALLBACK_NONE, now);
   }
   else
   {
-    rdcp_txaheadqueue_add(outgoing_message, decoded_length, IMPORTANT, FORCEDTX, TX_CALLBACK_NONE, time);
+    rdcp_txaheadqueue_add(CHANNEL868MG, outgoing_message, decoded_length, IMPORTANT, FORCEDTX, TX_CALLBACK_NONE, time);
   }
 
   return true;
@@ -1907,7 +1909,7 @@ void rdcp_send_ack_signed(uint16_t origin, uint16_t destination, uint16_t seqnr,
   /* Schedule the crafted message for sending */
   memcpy(&data, &rm.header, RDCP_HEADER_SIZE);
   for (int i=0; i<rm.header.rdcp_payload_length; i++) data[i + RDCP_HEADER_SIZE] = rm.payload.data[i];
-  rdcp_txqueue_add(data, RDCP_HEADER_SIZE + rm.header.rdcp_payload_length, IMPORTANT, NOTFORCEDTX, TX_CALLBACK_NONE, TX_WHEN_CF);
+  rdcp_txqueue_add(CHANNEL868MG, data, RDCP_HEADER_SIZE + rm.header.rdcp_payload_length, IMPORTANT, NOTFORCEDTX, TX_CALLBACK_NONE, TX_WHEN_CF);
 
   return;
 }
@@ -1948,7 +1950,7 @@ void rdcp_send_ack_unsigned(uint16_t origin, uint16_t destination, uint16_t seqn
   /* Schedule the crafted message for sending */
   memcpy(&data, &rm.header, RDCP_HEADER_SIZE);
   for (int i=0; i<rm.header.rdcp_payload_length; i++) data[i + RDCP_HEADER_SIZE] = rm.payload.data[i];
-  rdcp_txqueue_add(data, RDCP_HEADER_SIZE + rm.header.rdcp_payload_length, IMPORTANT, NOTFORCEDTX, TX_CALLBACK_NONE, TX_WHEN_CF);
+  rdcp_txqueue_add(CHANNEL868MG, data, RDCP_HEADER_SIZE + rm.header.rdcp_payload_length, IMPORTANT, NOTFORCEDTX, TX_CALLBACK_NONE, TX_WHEN_CF);
 
   return;
 }
@@ -2076,7 +2078,7 @@ void rdcp_send_cire(uint8_t subtype, uint16_t refnr, char *text)
   /* Schedule the crafted message for sending */
   memcpy(&data, &rm.header, RDCP_HEADER_SIZE);
   for (int i=0; i<rm.header.rdcp_payload_length; i++) data[i + RDCP_HEADER_SIZE] = rm.payload.data[i];
-  rdcp_txqueue_add(data, RDCP_HEADER_SIZE + rm.header.rdcp_payload_length, IMPORTANT, NOTFORCEDTX, TX_CALLBACK_CIRE, TX_WHEN_CF);
+  rdcp_txqueue_add(CHANNEL868MG, data, RDCP_HEADER_SIZE + rm.header.rdcp_payload_length, IMPORTANT, NOTFORCEDTX, TX_CALLBACK_CIRE, TX_WHEN_CF);
 
   return;
 }
@@ -2138,7 +2140,7 @@ void rdcp_heartbeat_send(void)
   /* Schedule the crafted message for sending */
   memcpy(&data, &rm.header, RDCP_HEADER_SIZE);
   for (int i=0; i<4; i++) data[RDCP_HEADER_SIZE + i] = rm.payload.data[i];
-  rdcp_txqueue_add(data, RDCP_HEADER_SIZE + 4, NOTIMPORTANT, NOTFORCEDTX, TX_CALLBACK_NONE, TX_WHEN_CF);
+  rdcp_txqueue_add(CHANNEL868MG, data, RDCP_HEADER_SIZE + 4, NOTIMPORTANT, NOTFORCEDTX, TX_CALLBACK_NONE, TX_WHEN_CF);
 
   return;
 }

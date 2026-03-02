@@ -83,6 +83,13 @@ void serial_banner(void)
   snprintf(buf, LEN, "%sINFO: Device LoRa SW: 0x%02X\0",      SERIAL_PREFIX, getMyLoRaSyncWord()); Serial.println(buf); if (bt_enabled) SerialBT.println(buf);
   snprintf(buf, LEN, "%sINFO: Device LoRa PW: %2d dBm\0",     SERIAL_PREFIX, getMyLoRaPower()); Serial.println(buf); if (bt_enabled) SerialBT.println(buf);
   snprintf(buf, LEN, "%sINFO: Device LoRa PL: %2d symbols\0", SERIAL_PREFIX, getMyLoRaPreambleLength()); Serial.println(buf); if (bt_enabled) SerialBT.println(buf);
+  snprintf(buf, LEN, "%sINFO: Device LoRa FQtx: %.3f MHz\0",    SERIAL_PREFIX, getMyLoRaFrequencyTX()); Serial.println(buf); if (bt_enabled) SerialBT.println(buf);
+  snprintf(buf, LEN, "%sINFO: Device LoRa BWtx: %3.0f kHz\0",   SERIAL_PREFIX, getMyLoRaBandwidthTX()); Serial.println(buf); if (bt_enabled) SerialBT.println(buf);
+  snprintf(buf, LEN, "%sINFO: Device LoRa SFtx: %2d\0",         SERIAL_PREFIX, getMyLoRaSpreadingFactorTX()); Serial.println(buf); if (bt_enabled) SerialBT.println(buf);
+  snprintf(buf, LEN, "%sINFO: Device LoRa CRtx: 4/%d\0",        SERIAL_PREFIX, getMyLoRaCodingRateTX()); Serial.println(buf); if (bt_enabled) SerialBT.println(buf);
+  snprintf(buf, LEN, "%sINFO: Device LoRa SWtx: 0x%02X\0",      SERIAL_PREFIX, getMyLoRaSyncWordTX()); Serial.println(buf); if (bt_enabled) SerialBT.println(buf);
+  snprintf(buf, LEN, "%sINFO: Device LoRa PWtx: %2d dBm\0",     SERIAL_PREFIX, getMyLoRaPowerTX()); Serial.println(buf); if (bt_enabled) SerialBT.println(buf);
+  snprintf(buf, LEN, "%sINFO: Device LoRa PLtx: %2d symbols\0", SERIAL_PREFIX, getMyLoRaPreambleLengthTX()); Serial.println(buf); if (bt_enabled) SerialBT.println(buf);
   snprintf(buf, LEN, "%sINFO: Device SerMode: %d\0",          SERIAL_PREFIX, MY_SERIAL_MODE); Serial.println(buf); if (bt_enabled) SerialBT.println(buf);
   return;
 }
@@ -413,6 +420,70 @@ void serial_process_command(String s, String processing_mode, bool persist_selec
 	    serial_writeln("INFO: Changed this device's LoRa preamble length to " + String(getMyLoRaPreambleLength()));
       if (persist_selected_commands) persist_serial_command_for_replay(s);
     }
+    else if (s_uppercase.startsWith("LORAFREQTX "))
+    {
+      String p1 = s.substring(11);
+      float new_freq = p1.toFloat();
+      setMyLoRaFrequencyTX(new_freq);
+      serial_writeln("INFO: Changed this device's LoRaTX frequency to " + String(getMyLoRaFrequencyTX()) + " MHz");
+      if (persist_selected_commands) persist_serial_command_for_replay(s);
+    }
+    else if (s_uppercase.startsWith("LORABWTX "))
+    {
+      String p1 = s.substring(9);
+      float new_bw = p1.toFloat();
+      setMyLoRaBandwidthTX(new_bw);
+      serial_writeln("INFO: Changed this device's LoRaTX bandwidth setting to " + String(getMyLoRaBandwidthTX()) + " kHz");
+      if (persist_selected_commands) persist_serial_command_for_replay(s);
+    }
+    else if (s_uppercase.startsWith("LORASFTX "))
+    {
+      String p1 = s.substring(9);
+      int new_sf = p1.toInt();
+      setMyLoRaSpreadingFactorTX(new_sf);
+	    serial_writeln("INFO: Changed this device's LoRaTX spreading factor to " + String(getMyLoRaSpreadingFactorTX()));
+      if (persist_selected_commands) persist_serial_command_for_replay(s);
+    }
+    else if (s_uppercase.startsWith("LORACRTX "))
+    {
+      String p1 = s.substring(9);
+      int new_cr = p1.toInt();
+      setMyLoRaCodingRateTX(new_cr);
+	    serial_writeln("INFO: Changed this device's LoRaTX coding rate to 4/" + String(getMyLoRaCodingRateTX()));
+      if (persist_selected_commands) persist_serial_command_for_replay(s);
+    }
+    else if (s_uppercase.startsWith("LORASWTX "))
+    {
+      char buffer[MINIBUFLEN];
+      String p1 = s.substring(9);
+      p1.toCharArray(buffer, MINIBUFLEN);
+      uint8_t target_sws = strtol(buffer, NULL, 16);
+      if ((target_sws != 0x12) && (target_sws != 0x34))
+      {
+        serial_writeln("ERROR: This device's firmware currently only supports 0x12 or 0x34 as LoRa syncword.");
+        return;
+      }
+      setMyLoRaSyncWordTX(target_sws);
+      snprintf(buffer, MINIBUFLEN-1, "%x\0", getMyLoRaSyncWordTX());
+	    serial_writeln("INFO: Changed this device's LoRaTX syncword to 0x" + String(buffer));
+      if (persist_selected_commands) persist_serial_command_for_replay(s);
+    }
+    else if (s_uppercase.startsWith("LORAPWTX "))
+    {
+      String p1 = s.substring(9);
+      int new_power = p1.toInt();
+      setMyLoRaPowerTX(new_power);
+	    serial_writeln("INFO: Changed this device's LoRaTX output power to " + String(getMyLoRaPowerTX()) + " dBm");
+      if (persist_selected_commands) persist_serial_command_for_replay(s);
+    }
+    else if (s_uppercase.startsWith("LORAPLTX "))
+    {
+      String p1 = s.substring(9);
+      int new_pl = p1.toInt();
+      setMyLoRaPreambleLengthTX(new_pl);
+	    serial_writeln("INFO: Changed this device's LoRaTX preamble length to " + String(getMyLoRaPreambleLengthTX()));
+      if (persist_selected_commands) persist_serial_command_for_replay(s);
+    } 
     else if (s_uppercase.startsWith("RDCPSFMUL "))
     {
       String p1 = s.substring(10);
