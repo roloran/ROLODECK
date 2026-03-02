@@ -375,11 +375,6 @@ bool rdcp_mg_process_rxed_lora_packet(uint8_t *lora_packet, uint16_t lora_packet
     // NB: Any RDCP Header or RDCP Payload field may have been corrupted,
     //     so we do not process anything further, including updates to CFEst.
     bad_crc_counter++;
-    if (bad_crc_counter % 10 == 0)
-    {
-      serial_writeln("WARNING: Bad CRC counter exceeded threshold - consider additional countermeasures!");
-      radio_apply_new_configuration();
-    }
     return false;
   }
 
@@ -400,6 +395,9 @@ bool rdcp_mg_process_rxed_lora_packet(uint8_t *lora_packet, uint16_t lora_packet
   {
     updateRoamingTable(rdcp_msg_in.header.sender, rssi);
   }
+
+  /* Ignore roaming beacons sent by DAs for further processing (already used for updating the roaming table above) */
+  if (rdcp_msg_in.header.message_type == RDCP_MSGTYPE_ROAMING_BEACON) return;
 
   print_rdcp_csv();
 

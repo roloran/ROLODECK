@@ -95,6 +95,9 @@ struct rdcp_message {
 #define RDCP_MSGTYPE_SIGNATURE               0x30
 #define RDCP_MSGTYPE_HEARTBEAT               0x31
 
+#define RDCP_MSGTYPE_TUNNEL                  0x40
+#define RDCP_MSGTYPE_ROAMING_BEACON          0x41
+
 /*
  * Subtypes for OFFICIAL ANNOUNCEMENTs
  */
