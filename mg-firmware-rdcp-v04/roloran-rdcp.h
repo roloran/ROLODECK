@@ -206,7 +206,7 @@ void rdcp_mg_process_incoming_message(bool is_duplicate);
   * Returns the current timestamp value of CFEst (Channel Free Estimator).
   * @return int64_t timestamp (monotonic clock) of when the channel is expected be free again
   */
-int64_t rdcp_get_channel_free_estimation(void);
+int64_t rdcp_get_channel_free_estimation(uint8_t channel=99);
 
 /**
   * Sets CFEst (Channel Free Estimator) to a new absolute timestamp.

@@ -4,6 +4,8 @@
 #define MAX_LORA_PAYLOAD_SIZE 230
 #define TX_QUEUE_LENGTH       32
 
+#include "roloran-rdcp.h"
+
 /**
  * Start listening to incoming LoRa packets.
  * The radio can be on standby, transmitting, or listening. 
@@ -105,7 +107,7 @@ bool lora_radio_send(uint8_t *data, uint8_t len);
  * Start Channel Activity Detection (CAD, listen-before-talk). 
  * The CAD callback is executed when a result is available. 
  */
-void lora_radio_startcad(void);
+void lora_radio_startcad(uint8_t channel=CHANNEL868MG);
 
 /**
  * Switches the LoRa radio into receive mode. 

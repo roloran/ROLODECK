@@ -23,8 +23,11 @@ struct rdcp_message rdcp_msg_in, rdcp_msg_out; // Global incoming and outgoing R
 bool   rdcp_ignore_duplicates = false;         // Do ignore RDCP Message duplicates currently?
 struct rdcp_dup_table dupe_table;              // One global RDCP Message Duplicate Table
 
-int64_t CFEst = my_millis();       // Current Channel Free Estimator
+uint8_t current_channel = CHANNEL868DA;
+int64_t CFEst = my_millis();       // Current Channel Free Estimator for CHANNEL868DA
 int64_t CFEst_old = my_millis();   // Previous value of CFEst
+int64_t CFEsttx = my_millis();       // Current Channel Free Estimator for CHANNEL868MG
+int64_t CFEst_oldtx = my_millis();   // Previous value of CFEst
 
 struct txqueue txq;       // One global TX Queue
 struct txaheadqueue txaq; // One global TX Ahead Queue
@@ -56,15 +59,25 @@ char     cire_current_text[INFOLEN];
 uint16_t cire_guitext_num = 1;
 uint16_t cire_current_ep = RDCP_NO_ADDRESS;
 
-int64_t rdcp_get_channel_free_estimation(void)
+int64_t rdcp_get_channel_free_estimation(uint8_t channel)
 {
-  return CFEst;
+  if (channel == CHANNEL868DA) return CFEst;
+  if (channel == CHANNEL868MG) return CFEsttx;
+  return current_channel == CHANNEL868DA ? CFEst : CFEsttx;
 }
 
 bool rdcp_set_channel_free_estimation(int64_t new_value)
 {
-  CFEst_old = CFEst;
-  CFEst = new_value;
+  if (current_channel == CHANNEL868DA)
+  {
+    CFEst_old = CFEst;
+    CFEst = new_value;
+  }
+  else
+  {
+    CFEst_oldtx = CFEsttx;
+    CFEsttx = new_value;
+  }
   return rdcp_txqueue_reschedule(0);
 }
 
@@ -448,7 +461,7 @@ bool rdcp_mg_process_rxed_lora_packet(uint8_t *lora_packet, uint16_t lora_packet
     free for the EP DA's ACK reply. 
     However, disable this in HQ mode.
   */
-  if (!hq_mode)
+  if (!hq_mode && (current_channel == CHANNEL868DA))
     if ((rdcp_msg_in.header.message_type == RDCP_MSGTYPE_CITIZEN_REPORT) &&
         (rdcp_msg_in.header.sender >= RDCP_ADDRESS_MG_LOWERBOUND)) rdcp_update_channel_free_estimation(CFEst + corridor_seconds * SECONDS_TO_MILLISECONDS);
 
@@ -509,8 +522,38 @@ bool rdcp_check_duplicate_message(uint16_t origin, uint16_t sequence_number)
   return false;
 }
 
+uint16_t airtime_in_ms_mgchannel(uint8_t payload_size)
+{
+  uint16_t time_for_packet = 0;
+
+  uint32_t bandwidth_in_hz = (uint32_t) getMyLoRaBandwidthTX() * 1000;
+  uint8_t  low_data_rate_optimization = 1;
+  uint8_t  implicit_header_mode = 0;
+  uint8_t  coding_rate = getMyLoRaCodingRateTX() - 4;
+  uint8_t  SF = getMyLoRaSpreadingFactorTX();
+
+  double time_per_symbol = pow(2, SF) / bandwidth_in_hz;
+
+  /* Calculate the airtime for the preamble */
+  uint8_t number_of_preamble_symbols = getMyLoRaPreambleLengthTX();
+  double time_for_preamble = (number_of_preamble_symbols + 4.25) * time_per_symbol;
+
+  /* Calculate the airtime for the payload */
+  double number_of_payload_symbols = 8 + max((coding_rate + 4)*ceil((8 * payload_size - 4 * SF + 28 + 16 - 20 * implicit_header_mode) / (4*(SF - 2*low_data_rate_optimization))), 0.0);
+  double time_for_payload = number_of_payload_symbols * time_per_symbol;
+
+  /* Sum it up, converting from seconds to milliseconds and from Double to Int */
+  time_for_packet = (uint16_t) (1000 * (time_for_preamble + time_for_payload));
+
+  most_recent_airtime = time_for_packet;
+
+  return time_for_packet;
+}
+
 uint16_t airtime_in_ms(uint8_t payload_size)
 {
+  if (current_channel == CHANNEL868MG) return airtime_in_ms_mgchannel(payload_size);
+
   uint16_t time_for_packet = 0;
 
   uint32_t bandwidth_in_hz = (uint32_t) getMyLoRaBandwidth() * 1000;
@@ -609,7 +652,8 @@ void rdcp_update_channel_free_estimator_rx(void)
   rdcp_update_channel_free_estimation(channel_free_at);
 
   char buf[INFOLEN];
-  snprintf(buf, INFOLEN, "INFO: Channel free estimation: +%zu ms, @%llu ms (airtime %u ms, retrans %zu ms, timeslot %zu ms, %d fut ts)", channel_free_after, channel_free_at, airtime, remaining_current_sender_time, timeslot_duration, future_timeslots);
+  snprintf(buf, INFOLEN, "INFO: Channel %d free estimation: +%zu ms, @%llu ms (airtime %u ms, retrans %zu ms, timeslot %zu ms, %d fut ts)", 
+    current_channel, channel_free_after, channel_free_at, airtime, remaining_current_sender_time, timeslot_duration, future_timeslots);
   serial_writeln(buf);
 
   return;
@@ -968,7 +1012,7 @@ int64_t rdcp_get_timeslot_duration(uint8_t *data)
   struct rdcp_header h;
   memcpy(&h, data, RDCP_HEADER_SIZE);
 
-  uint16_t airtime = airtime_in_ms(RDCP_HEADER_SIZE + h.rdcp_payload_length);
+  uint16_t airtime = airtime_in_ms_mgchannel(RDCP_HEADER_SIZE + h.rdcp_payload_length);
   uint16_t airtime_with_buffer = airtime + 1000;
 
   uint8_t nrt = NRT_LOW;
@@ -1017,7 +1061,9 @@ bool rdcp_txqueue_add(uint8_t channel, uint8_t *data, uint8_t len, bool importan
     );
     serial_writeln(info);
   }
-  snprintf(info, INFOLEN, "INFO: CFEst = %" PRId64 ", rel %" PRId64, CFEst, CFEst-now);
+  snprintf(info, INFOLEN, "INFO: CFEst = %" PRId64 ", rel %" PRId64, 
+    current_channel == CHANNEL868DA ? CFEst : CFEsttx, 
+    current_channel == CHANNEL868DA ? CFEst-now : CFEsttx-now);
   serial_writeln(info);
 
   if (txq.num_entries == MAX_TXQUEUE_ENTRIES)
@@ -1053,7 +1099,7 @@ bool rdcp_txqueue_add(uint8_t channel, uint8_t *data, uint8_t len, bool importan
       txq.entries[i].important = important;
       if (forced_time == NO_TIMESTAMP)
       {
-        txq.entries[i].originally_scheduled_time = rdcp_get_channel_free_estimation();
+        txq.entries[i].originally_scheduled_time = rdcp_get_channel_free_estimation(channel);
         if (txq.entries[i].originally_scheduled_time < now) txq.entries[i].originally_scheduled_time = now;
       }
       else
@@ -1081,7 +1127,7 @@ bool rdcp_txqueue_add(uint8_t channel, uint8_t *data, uint8_t len, bool importan
 bool rdcp_txqueue_reschedule(int64_t offset=0)
 {
   int64_t now = my_millis();
-  int64_t delta = CFEst - now; 
+  int64_t delta = current_channel == CHANNEL868DA ? CFEst - now : CFEsttx - now; 
   bool dropped = false;
 
   if (delta < 0) delta = 0;
@@ -1096,7 +1142,7 @@ bool rdcp_txqueue_reschedule(int64_t offset=0)
 
       txq.entries[i].num_of_reschedules++;
       
-      int64_t next_timestamp = CFEst;
+      int64_t next_timestamp = current_channel == CHANNEL868DA ? CFEst : CFEsttx;
       for (int i=0; i < MAX_TXQUEUE_ENTRIES; i++)
       {
           if (txq.entries[i].in_process) continue;
@@ -1105,9 +1151,11 @@ bool rdcp_txqueue_reschedule(int64_t offset=0)
           if (txq.entries[i].currently_scheduled_time  < next_timestamp) 
             next_timestamp = txq.entries[i].currently_scheduled_time;
       }
-      int64_t maximum_diff_to_cfest = CFEst - next_timestamp;
+      int64_t maximum_diff_to_cfest = current_channel == CHANNEL868DA ? CFEst - next_timestamp : CFEsttx - next_timestamp;
+
+      int64_t cfe = current_channel == CHANNEL868DA ? CFEst : CFEsttx;
   
-      if (txq.entries[i].currently_scheduled_time < CFEst + offset)
+      if (txq.entries[i].currently_scheduled_time < cfe + offset)
       {
         txq.entries[i].currently_scheduled_time += maximum_diff_to_cfest + offset;
       }
@@ -1146,7 +1194,9 @@ bool rdcp_txqueue_reschedule(int64_t offset=0)
     );
     serial_writeln(info);
   }
-  snprintf(info, INFOLEN, "INFO: CFEst = %" PRId64 ", rel %" PRId64, CFEst, CFEst-now);
+  snprintf(info, INFOLEN, "INFO: CFEst %d = %" PRId64 ", rel %" PRId64, current_channel, 
+    current_channel == CHANNEL868DA ? CFEst : CFEsttx, 
+    current_channel == CHANNEL868DA ? CFEst-now : CFEsttx - now);
   serial_writeln(info);
 
   return dropped;
@@ -1202,7 +1252,9 @@ void rdcp_dump_queues(void)
   snprintf(info, INFOLEN, "INFO: QUEUE DUMP TXAQ END, num=%02d/%02d", txaq.num_entries, MAX_TXAHEADQUEUE_ENTRIES);
   serial_writeln(info);
 
-  snprintf(info, INFOLEN, "INFO: Now = %" PRId64 " ms, CFEst = %" PRId64 " ms, rel %" PRId64 " ms", now, CFEst, CFEst-now);
+  snprintf(info, INFOLEN, "INFO: Now = %" PRId64 " ms, CFEst = %" PRId64 " ms, rel %" PRId64 " ms", now, 
+    current_channel == CHANNEL868DA ? CFEst : CFEsttx, 
+    current_channel == CHANNEL868DA ? CFEst-now : CFEsttx-now);
   serial_writeln(info);
 
   return;
@@ -1212,7 +1264,7 @@ void rdcp_txqueue_compress(void)
 {
   int64_t now = my_millis();
 
-  if (now > rdcp_get_channel_free_estimation() + 10 * SECONDS_TO_MILLISECONDS)
+  if (now > rdcp_get_channel_free_estimation(CHANNEL868MG) + 10 * SECONDS_TO_MILLISECONDS)
   { /* Channel is unused for more than 10 seconds; check whether we have something to send earlier. */
     bool has_forced_entry = false;
     int earliest = -1;
@@ -1265,14 +1317,14 @@ bool rdcp_txqueue_loop(void)
   /* Skip if any transmission is already ongoing */
   if (tx_ongoing != -1)
   {
-    if (now - last_tx_activity > 180 * SECONDS_TO_MILLISECONDS)
+    if (now - last_tx_activity > 60 * SECONDS_TO_MILLISECONDS)
     {
       snprintf(info, INFOLEN, "WARNING: TX_Activity Timeout for TXQi %d, restarting TXQ processing", tx_ongoing);
       serial_writeln(info);
       txq.entries[tx_ongoing].in_process = false;
       txq.entries[tx_ongoing].cad_retry = 0;
       tx_ongoing = -1;
-      radio_apply_new_configuration(); // Re-initialize the radio hardware
+      radio_apply_new_configuration(); // Re-initialize the radio hardware, switches to CHANNEL868DA
     }
     return false;
   }
@@ -1310,6 +1362,17 @@ bool rdcp_txqueue_loop(void)
   snprintf(buf, INFOLEN, "INFO: Outgoing message up for send-processing -> TXQi %d, len %d, TSd %" PRId64 ", @%" PRId64 ", =%" PRId64,
            tx_ongoing, txq.entries[tx_ongoing].payload_length, txq.entries[tx_ongoing].timeslot_duration, txq.entries[tx_ongoing].currently_scheduled_time, now);
   serial_writeln(buf);
+
+  if ((current_channel == CHANNEL868DA) && (txq.entries[tx_ongoing].tx_channel == CHANNEL868MG))
+  { 
+    radio_switch_channel(CHANNEL868MG);
+    current_channel = CHANNEL868MG;
+  }
+  if ((current_channel == CHANNEL868MG) && (txq.entries[tx_ongoing].tx_channel == CHANNEL868DA))
+  { 
+    radio_switch_channel(CHANNEL868DA);
+    current_channel = CHANNEL868DA;
+  }
 
   if (txq.entries[tx_ongoing].force_tx == false)
   {
@@ -1387,7 +1450,7 @@ bool rdcp_txaheadqueue_loop(void)
   return true;
 }
 
-bool rdcp_tx_interface(String b64rdcpmsg, int64_t time=TX_WHEN_CF, uint8_t channel=CHANNEL868)
+bool rdcp_tx_interface(String b64rdcpmsg, int64_t time=TX_WHEN_CF, uint8_t channel=CHANNEL868MG)
 {
   int64_t now = my_millis();
   char buffer[BUFFER_SIZE];
@@ -1409,15 +1472,15 @@ bool rdcp_tx_interface(String b64rdcpmsg, int64_t time=TX_WHEN_CF, uint8_t chann
 
   if (time == TX_WHEN_CF)
   {
-    rdcp_txqueue_add(CHANNEL868MG, outgoing_message, decoded_length, IMPORTANT, NOTFORCEDTX, TX_CALLBACK_NONE, NO_FORCED_TIME);
+    rdcp_txqueue_add(channel, outgoing_message, decoded_length, IMPORTANT, NOTFORCEDTX, TX_CALLBACK_NONE, NO_FORCED_TIME);
   }
   else if (time == TX_IMMEDIATELY)
   {
-    rdcp_txqueue_add(CHANNEL868MG, outgoing_message, decoded_length, IMPORTANT, FORCEDTX, TX_CALLBACK_NONE, now);
+    rdcp_txqueue_add(channel, outgoing_message, decoded_length, IMPORTANT, FORCEDTX, TX_CALLBACK_NONE, now);
   }
   else
   {
-    rdcp_txaheadqueue_add(CHANNEL868MG, outgoing_message, decoded_length, IMPORTANT, FORCEDTX, TX_CALLBACK_NONE, time);
+    rdcp_txaheadqueue_add(channel, outgoing_message, decoded_length, IMPORTANT, FORCEDTX, TX_CALLBACK_NONE, time);
   }
 
   return true;
@@ -1425,7 +1488,7 @@ bool rdcp_tx_interface(String b64rdcpmsg, int64_t time=TX_WHEN_CF, uint8_t chann
 
 void rdcp_send_message_cad(void)
 {
-  lora_radio_startcad();
+  lora_radio_startcad(current_channel);
   return;
 }
 
@@ -1451,8 +1514,8 @@ void rdcp_update_cfest_out(uint8_t len, uint8_t rcnt, uint8_t mt)
   rdcp_update_channel_free_estimation(channel_free_at);
 
   char buf[INFOLEN];
-  snprintf(buf, INFOLEN, "INFO: CFEst4current (out): +%zu ms, @%llu ms (airtime %u ms, retrans %zu ms, timeslot %zu ms, %d fut ts)", 
-    channel_free_after, channel_free_at, airtime, remaining_current_sender_time, timeslot_duration, future_timeslots);
+  snprintf(buf, INFOLEN, "INFO: CFEst4current %d (out): +%zu ms, @%llu ms (airtime %u ms, retrans %zu ms, timeslot %zu ms, %d fut ts)", 
+    current_channel, channel_free_after, channel_free_at, airtime, remaining_current_sender_time, timeslot_duration, future_timeslots);
   serial_writeln(buf);
 
   return;
@@ -1463,7 +1526,9 @@ bool rdcp_send_message_force(void)
   if (tx_ongoing == -1)
   {
     serial_writeln("WARNING: rdcp_send_message_force() called with no tx_ongoing");
-    lora_radio_receivemode();
+    // lora_radio_receivemode();
+    radio_switch_channel(CHANNEL868DA);
+    current_channel = CHANNEL868DA;
     return false;
   }
   int64_t now = my_millis();
@@ -1472,7 +1537,8 @@ bool rdcp_send_message_force(void)
   snprintf(buf, INFOLEN, "INFO: TX Start for TXQi %d, len %d, TSd %" PRId64 "ms, latency %" PRId64 " ms", tx_ongoing, txq.entries[tx_ongoing].payload_length, txq.entries[tx_ongoing].timeslot_duration, timediff);
   serial_writeln(buf);
 
-  snprintf(buf, INFOLEN, "TXMETA %d %" PRId64 " %3.3f", txq.entries[tx_ongoing].payload_length, now, getMyLoRaFrequency());
+  snprintf(buf, INFOLEN, "TXMETA %d %" PRId64 " %3.3f", txq.entries[tx_ongoing].payload_length, now, 
+    current_channel == CHANNEL868DA ? getMyLoRaFrequency() : getMyLoRaFrequencyTX());
   serial_writeln(buf);
 
   int encodedLength = Base64ren.encodedLength(txq.entries[tx_ongoing].payload_length);
@@ -1497,6 +1563,8 @@ void rdcp_callback_txfin(void)
   if (tx_ongoing == -1)
   {
     serial_writeln("WARNING: rdcp_callback_txfin() without tx_ongoing");
+    radio_switch_channel(CHANNEL868DA);
+    current_channel = CHANNEL868DA;
     return;
   }
 
@@ -1565,6 +1633,9 @@ void rdcp_callback_txfin(void)
     // and might want to start sending urgent messages. Thus, as we just used
     // the channel for ourselves for some time, give them a chance.
     rdcp_txqueue_reschedule(random(1000 * sf_multiplier, 2000 * sf_multiplier));
+
+    radio_switch_channel(CHANNEL868DA);
+    current_channel = CHANNEL868DA;
   }
 
   return;
@@ -1577,13 +1648,16 @@ bool rdcp_callback_cad(bool cad_busy)
 
   last_tx_activity = my_millis();
 
-  snprintf(buf, INFOLEN, "INFO: Send-processing: CAD reports channel %s (try %d for TXQi%d)", channel_free ? "free" : "busy", txq.entries[tx_ongoing].cad_retry + 1, tx_ongoing);
+  snprintf(buf, INFOLEN, "INFO: Send-processing: CAD reports channel %d %s (try %d for TXQi%d)", 
+    current_channel, channel_free ? "free" : "busy", txq.entries[tx_ongoing].cad_retry + 1, tx_ongoing);
   serial_writeln(buf);
 
   if (tx_ongoing == -1)
   {
     serial_writeln("WARNING: CAD attempted without ongoing transmission");
-    lora_radio_receivemode();
+    // lora_radio_receivemode();
+    radio_switch_channel(CHANNEL868DA);
+    current_channel = CHANNEL868DA;
     return false;
   }
 
@@ -1602,12 +1676,22 @@ bool rdcp_callback_cad(bool cad_busy)
   }
   else if (retry == 5)
   {
-    lora_radio_receivemode();
+    // lora_radio_receivemode();
+    uint8_t previous_channel = current_channel;
+    radio_switch_channel(CHANNEL868DA);
+    current_channel = CHANNEL868DA;
     txq.entries[tx_ongoing].in_process = false;
     tx_ongoing = -1;
     int64_t random_delay = random(2100 * sf_multiplier, 2500 * sf_multiplier);
     rdcp_txqueue_reschedule(random_delay);
-    if (CFEst < my_millis() + random_delay) CFEst = my_millis() + random_delay; // Don't re-schedule twice
+    if (previous_channel == CHANNEL868DA)
+    {
+      if (CFEst < my_millis() + random_delay) CFEst = my_millis() + random_delay; // Don't re-schedule twice
+    }
+    else 
+    {
+      if (CFEsttx < my_millis() + random_delay) CFEsttx = my_millis() + random_delay; // Don't re-schedule twice
+    }
   }
   else if ((retry >= 6) && (retry <= 9))
   {
@@ -1615,12 +1699,22 @@ bool rdcp_callback_cad(bool cad_busy)
   }
   else if ((retry >= 10) && (retry <= 14))
   {
-    lora_radio_receivemode();
+//    lora_radio_receivemode();
+    uint8_t previous_channel = current_channel;
+    radio_switch_channel(CHANNEL868DA);
+    current_channel = CHANNEL868DA;
     txq.entries[tx_ongoing].in_process = false;
     tx_ongoing = -1;
     int64_t random_delay = random(3100 * sf_multiplier, 3500 * sf_multiplier);
     rdcp_txqueue_reschedule(random_delay);
-    if (CFEst < my_millis() + random_delay) CFEst = my_millis() + random_delay; // Don't re-schedule twice
+    if (previous_channel == CHANNEL868DA)
+    {
+      if (CFEst < my_millis() + random_delay) CFEst = my_millis() + random_delay; // Don't re-schedule twice
+    }
+    else 
+    {
+      if (CFEsttx < my_millis() + random_delay) CFEsttx = my_millis() + random_delay; // Don't re-schedule twice
+    }
   }
   else if (retry >= 15)
   {

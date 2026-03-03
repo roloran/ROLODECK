@@ -118,6 +118,8 @@ void radio_setup(void)
 	hwConfig.USE_DIO3_TCXO       = LORA_USE_DIO3_TCXO;
 	hwConfig.USE_DIO3_ANT_SWITCH = LORA_USE_DIO3_ANT_SWITCH;
 
+  serial_writeln("INFO: Setting up LoRa radio, switching to CHANNEL868DA");
+
   if (radio_hardware_initialized == false)
   {
 	  lora_hardware_init(hwConfig);
@@ -191,11 +193,27 @@ void radio_switch_channel(uint8_t channel)
   delay(1);
 	Radio.Standby();
 
-  uint32_t freq = channel == CHANNEL868DA ? getMyLoRaFrequency() : getMyLoRaFrequencyTX();
-  freq = freq * 1000 * 1000;
+  if (channel == CHANNEL868DA)
+  {
+    serial_writeln("INFO: Switching radio to CHANNEL868DA");
+  }
+  else if (channel == CHANNEL868MG)
+  {
+    serial_writeln("INFO: Switching radio to CHANNEL868MG");
+  }
+  else 
+  {
+    serial_writeln("WARNING: Invalid LoRa radio channel switch");
+  }
+
+  uint32_t freq;
+  if (channel == CHANNEL868DA) freq = getMyLoRaFrequency() * 1000 * 1000; 
+  else freq = getMyLoRaFrequencyTX() * 1000 * 1000;
 	Radio.SetChannel(freq);
 
-  uint8_t sw = channel == CHANNEL868DA ? getMyLoRaSyncWord() : getMyLoRaSyncWordTX();
+  uint8_t sw;
+  if (channel == CHANNEL868DA) sw = getMyLoRaSyncWord();
+  else sw = getMyLoRaSyncWordTX();
   if (sw != 0x34)
   {
     Radio.SetPublicNetwork(false);
@@ -205,14 +223,28 @@ void radio_switch_channel(uint8_t channel)
     Radio.SetPublicNetwork(true);
   }
 
-  uint8_t TX_OUTPUT_POWER = channel == CHANNEL868DA ? getMyLoRaPower() : getMyLoRaPowerTX();
+  uint8_t TX_OUTPUT_POWER;
+  if (channel == CHANNEL868DA) TX_OUTPUT_POWER = getMyLoRaPower();
+  else TX_OUTPUT_POWER = getMyLoRaPowerTX();
+
   uint8_t LORA_BANDWIDTH = 0;
-  uint8_t lbw = channel == CHANNEL868DA ? getMyLoRaBandwidth() : getMyLoRaBandwidthTX();
+  uint8_t lbw;
+  if (channel == CHANNEL868DA) lbw = getMyLoRaBandwidth();
+  else lbw = getMyLoRaBandwidthTX();
   if (lbw == 250.0) LORA_BANDWIDTH = 1;
   if (lbw == 500.0) LORA_BANDWIDTH = 2;
-  uint8_t LORA_SPREADING_FACTOR = channel == CHANNEL868DA ? getMyLoRaSpreadingFactor() : getMyLoRaSpreadingFactorTX();
-  uint8_t LORA_CODINGRATE = channel == CHANNEL868DA ? getMyLoRaCodingRate() - 4 : getMyLoRaCodingRateTX() - 4;
-  uint8_t LORA_PREAMBLE_LENGTH = channel == CHANNEL868DA ? getMyLoRaPreambleLength() : getMyLoRaPreambleLengthTX();
+
+  uint8_t LORA_SPREADING_FACTOR;
+  if (channel == CHANNEL868DA) LORA_SPREADING_FACTOR = getMyLoRaSpreadingFactor();
+  else LORA_SPREADING_FACTOR = getMyLoRaSpreadingFactorTX();
+
+  uint8_t LORA_CODINGRATE;
+  if (channel == CHANNEL868DA) LORA_CODINGRATE = getMyLoRaCodingRate() - 4;
+  else LORA_CODINGRATE = getMyLoRaCodingRateTX() - 4;
+
+  uint8_t LORA_PREAMBLE_LENGTH;
+  if (channel == CHANNEL868DA) LORA_PREAMBLE_LENGTH = getMyLoRaPreambleLength();
+  else LORA_PREAMBLE_LENGTH = getMyLoRaPreambleLengthTX();
 
   uint8_t  LORA_SYMBOL_TIMEOUT = 0;
   bool     LORA_FIX_LENGTH_PAYLOAD_ON = false;
@@ -237,6 +269,11 @@ void radio_switch_channel(uint8_t channel)
 	RadioEvents.CadDone   = OnCadDone;
 
   startReceiveMode();
+
+  char radio_info[INFOLEN];
+  snprintf(radio_info, INFOLEN, "INFO: Channel %d parameters are F %d SW %02X PW %d BW %d SF %d CR %d PL %d", 
+           channel, freq, sw, TX_OUTPUT_POWER, LORA_BANDWIDTH, LORA_SPREADING_FACTOR, LORA_CODINGRATE, LORA_PREAMBLE_LENGTH);
+  serial_writeln(radio_info);
 
   return;
 }
@@ -328,7 +365,7 @@ bool lora_radio_send(uint8_t *data, uint8_t len)
   return true;
 }
 
-void lora_radio_startcad(void)
+void lora_radio_startcad(uint8_t channel)
 {
   serial_writeln("INFO: Starting LoRa Channel Activity Detection");
   digitalWrite(TDECK_TFT_CS, HIGH);
@@ -337,7 +374,14 @@ void lora_radio_startcad(void)
   delay(1);
 	Radio.Standby();
   delay(1);
-	Radio.SetCadParams(LORA_CAD_08_SYMBOL, getMyLoRaSpreadingFactor() + 13, 10, LORA_CAD_ONLY, 0);
+  if (channel == CHANNEL868DA)
+  {
+	  Radio.SetCadParams(LORA_CAD_08_SYMBOL, getMyLoRaSpreadingFactor() + 13, 10, LORA_CAD_ONLY, 0);
+  }
+  else 
+  {
+	  Radio.SetCadParams(LORA_CAD_08_SYMBOL, getMyLoRaSpreadingFactorTX() + 13, 10, LORA_CAD_ONLY, 0);
+  }
   delay(1);
 	Radio.StartCad();
   return;
