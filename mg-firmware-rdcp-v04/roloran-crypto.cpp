@@ -43,7 +43,6 @@ bool ssc_initialized = false;
 SchnorrSigVerify ssv;
 bool ssv_initialized = false;
 
-
 bool schnorr_init_ctx(void)
 {
   if (ssc_initialized) return true;

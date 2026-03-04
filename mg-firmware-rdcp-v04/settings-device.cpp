@@ -29,7 +29,7 @@ uint8_t  MY_LORA_SW = 0x12;            //< LoRa Short Sync Word
 int      MY_LORA_POWER = 14;           //< LoRa Output Power in dBm, -17 to 22
 uint16_t MY_LORA_PREAMBLE_LENGTH = 15; //< LoRa number of Preamble Symbols
 
-float    MY_LORA_FREQ_TX = 869.0;         //< LoRa Frequency in MHz
+float    MY_LORA_FREQ_TX = 869.900;       //< LoRa Frequency in MHz
 float    MY_LORA_BW_TX = 125.0;           //< LoRa Bandwidth
 uint8_t  MY_LORA_SF_TX = 7;               //< LoRa Spreading Factor
 int      MY_LORA_CR_TX = 5;               //< LoRa Coding Rate as per RadioLib
