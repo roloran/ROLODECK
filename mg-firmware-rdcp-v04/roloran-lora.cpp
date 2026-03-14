@@ -332,9 +332,10 @@ void radio_loop()
 
   if ((has_timeout_rx == true) || (has_error_rx == true))
   {
+    if (has_timeout_rx) serial_writeln("WARNING: LoRa RX_timeout.");
+    if (has_error_rx) serial_writeln("WARNING: LoRa RX_error.");
     has_timeout_rx = false;
     has_error_rx = false;
-    serial_writeln("WARNING: LoRa RX_timeout.");
     radio_apply_new_configuration(); // Re-initalize the radio
     startReceiveMode();
   }
@@ -376,11 +377,13 @@ void lora_radio_startcad(uint8_t channel)
   delay(1);
   if (channel == CHANNEL868DA)
   {
-	  Radio.SetCadParams(LORA_CAD_08_SYMBOL, getMyLoRaSpreadingFactor() + 13, 10, LORA_CAD_ONLY, 0);
+	  //Radio.SetCadParams(LORA_CAD_08_SYMBOL, getMyLoRaSpreadingFactor() + 13, 10, LORA_CAD_ONLY, 0);
+	  Radio.SetCadParams(LORA_CAD_08_SYMBOL, getMyLoRaSpreadingFactor() + 13, 10, LORA_CAD_RX, 0);
   }
   else 
   {
-	  Radio.SetCadParams(LORA_CAD_08_SYMBOL, getMyLoRaSpreadingFactorTX() + 13, 10, LORA_CAD_ONLY, 0);
+	  //Radio.SetCadParams(LORA_CAD_08_SYMBOL, getMyLoRaSpreadingFactorTX() + 13, 10, LORA_CAD_ONLY, 0);
+	  Radio.SetCadParams(LORA_CAD_08_SYMBOL, getMyLoRaSpreadingFactorTX() + 13, 10, LORA_CAD_RX, 0);
   }
   delay(1);
 	Radio.StartCad();
