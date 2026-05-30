@@ -84,7 +84,7 @@ time_t tdeck_get_time(void)
 
     struct tm t = {0};
     t.tm_year = hqts.year - 1900; // needs year - 1900
-    t.tm_mon = hqts.month;
+    t.tm_mon = hqts.month - 1;
     t.tm_mday = hqts.day;
     t.tm_hour = hqts.hour;
     t.tm_min = hqts.minute;
@@ -587,7 +587,7 @@ void mb_refresh_display(void)
             struct tm ti;
             if (localtime_r(&cur_he.timestamp_added_abs, &ti))
             {
-                snprintf(info, INFOLEN, "\n[Empfangen %02d.%02d.%04d %02d:%02d]\n", ti.tm_mday, ti.tm_mon, ti.tm_year + 1900, ti.tm_hour, ti.tm_min);
+                snprintf(info, INFOLEN, "\n[Empfangen %02d.%02d.%04d %02d:%02d]\n", ti.tm_mday, ti.tm_mon + 1, ti.tm_year + 1900, ti.tm_hour, ti.tm_min);
             }
         }
         else
@@ -1312,11 +1312,11 @@ void mb_show_current(int as_number)
             {
                 if (cur_he.local == GENERATED_EXTERNALLY)
                 {
-                    snprintf(textpart, INFOLEN, "Empfangen %02d.%02d.%04d %02d:%02d\n", ti.tm_mday, ti.tm_mon, ti.tm_year + 1900, ti.tm_hour, ti.tm_min);
+                    snprintf(textpart, INFOLEN, "Empfangen %02d.%02d.%04d %02d:%02d\n", ti.tm_mday, ti.tm_mon + 1, ti.tm_year + 1900, ti.tm_hour, ti.tm_min);
                 }
                 else
                 {
-                    snprintf(textpart, INFOLEN, "%02d.%02d.%04d %02d:%02d\n", ti.tm_mday, ti.tm_mon, ti.tm_year + 1900, ti.tm_hour, ti.tm_min);
+                    snprintf(textpart, INFOLEN, "%02d.%02d.%04d %02d:%02d\n", ti.tm_mday, ti.tm_mon + 1, ti.tm_year + 1900, ti.tm_hour, ti.tm_min);
                 }
             }
         }
@@ -1338,6 +1338,10 @@ void mb_show_current(int as_number)
             else if (cur_he.subtype == RDCP_MSGTYPE_OA_SUBTYPE_INQUIRY)
             {
                 snprintf(textblob, 8192, "%sRückfrage des Krisenstabs\nzu Ihrer Nachricht %04X-%04X\n", textpart, getMyRDCPAddress(), cur_he.refnr);
+            }
+            else
+            {
+                snprintf(textblob, 8192, "Unbekannter Nachrichtentyp; Software-Update erforderlich");
             }
 
             strcat(textblob, "\n");
@@ -1427,11 +1431,11 @@ void mb_show_current(int as_number)
             {
                 if (cur_he.local == GENERATED_EXTERNALLY)
                 {
-                    snprintf(textpart, INFOLEN, "Empfangen %02d.%02d.%04d %02d:%02d\n", ti.tm_mday, ti.tm_mon, ti.tm_year + 1900, ti.tm_hour, ti.tm_min);
+                    snprintf(textpart, INFOLEN, "Empfangen %02d.%02d.%04d %02d:%02d\n", ti.tm_mday, ti.tm_mon + 1, ti.tm_year + 1900, ti.tm_hour, ti.tm_min);
                 }
                 else
                 {
-                    snprintf(textpart, INFOLEN, "%02d.%02d.%04d %02d:%02d\n", ti.tm_mday, ti.tm_mon, ti.tm_year + 1900, ti.tm_hour, ti.tm_min);
+                    snprintf(textpart, INFOLEN, "%02d.%02d.%04d %02d:%02d\n", ti.tm_mday, ti.tm_mon + 1, ti.tm_year + 1900, ti.tm_hour, ti.tm_min);
                 }
             }
         }

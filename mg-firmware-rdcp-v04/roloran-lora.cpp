@@ -17,9 +17,9 @@
 
 static RadioEvents_t RadioEvents;
 hw_config            hwConfig;
-uint8_t              cad_repeat = 0;
-int64_t              tx_time = 0;
-int64_t              rx_timestamp = NO_TIMESTAMP;
+volatile uint8_t     cad_repeat = 0;
+volatile int64_t     tx_time = 0;
+volatile int64_t     rx_timestamp = NO_TIMESTAMP;
 
 volatile bool        has_message_to_send = false;
 uint8_t              outgoing_message[BUFFER_SIZE];
@@ -31,21 +31,21 @@ volatile bool        do_start_send = false;
 volatile bool        tx_finished = false;
 int64_t              tx_wallclock_time = NO_DURATION;
 uint8_t              cad_stats_tries = 0;
-bool                 has_timeout_tx = false;
-bool                 has_timeout_rx = false;
-bool                 has_error_rx = false;
+volatile bool        has_timeout_tx = false;
+volatile bool        has_timeout_rx = false;
+volatile bool        has_error_rx = false;
 
 uint8_t              receive_buffer[BUFFER_SIZE];
 uint16_t             receive_buffer_length = 0;
 int16_t              receive_rssi = 0;
 uint8_t              receive_snr = 0;
 
-bool                 new_message_available = false;
+volatile bool        new_message_available = false;
 
-bool                 new_cad_result_available = false;
-bool                 new_cad_result_busy = false;
-bool                 has_txed = false;
-int64_t              has_txed_timestamp = NO_TIMESTAMP;
+volatile bool        new_cad_result_available = false;
+volatile bool        new_cad_result_busy = false;
+volatile bool        has_txed = false;
+volatile int64_t     has_txed_timestamp = NO_TIMESTAMP;
 
 /**
  * @return int64_t Current monotonic clock time in milliseconds. 
@@ -423,13 +423,16 @@ void OnTxDone(void)
  */
 void OnRxDone(uint8_t *payload, uint16_t size, int16_t rssi, int8_t snr)
 {
+  uint16_t size_to_copy = size;
+  if (size > RDCP_MAX_PAYLOAD_SIZE_LORA) size_to_copy = RDCP_MAX_PAYLOAD_SIZE_LORA;
+
   has_received_message = true;
 
   receive_buffer_length = size;
   receive_rssi = rssi;
   receive_snr = snr;
 
-  memcpy(receive_buffer, payload, size);
+  memcpy(receive_buffer, payload, size_to_copy);
   rx_timestamp = timeNow();
 
 	return;

@@ -1,7 +1,6 @@
 #ifndef _ROLORAN_LORA
 #define _ROLORAN_LORA
 
-#define MAX_LORA_PAYLOAD_SIZE 230
 #define TX_QUEUE_LENGTH       32
 
 #include "roloran-rdcp.h"

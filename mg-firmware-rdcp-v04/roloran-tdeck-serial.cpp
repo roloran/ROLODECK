@@ -121,7 +121,7 @@ bool serial_write(String s, bool use_prefix)
       }
     }
     Serial.flush();
-    xSemaphoreGive(highlander);
+    if (highlander) xSemaphoreGive(highlander);
     return true;
   }
   return false;
@@ -167,8 +167,8 @@ String serial_readln(void)
     if (SerialBT.available())
     {
       char buf[BUFLEN];
-      auto count = SerialBT.readBytes((uint8_t *) buf, BUFLEN);
-      if (count >= 1) return String(buf);
+      auto count = SerialBT.readBytes((uint8_t *) buf, BUFLEN-1);
+      if (count >= 1) { buf[count] = '\0'; return String(buf); }
     }
   }
   return Serial.readString();
@@ -262,7 +262,7 @@ void serial_process_command(String s, String processing_mode, bool persist_selec
       {
         if (localtime_r(&wallclock, &ti)) 
         {
-          snprintf(timestamp, DATABUFLEN, "%02d.%02d.%04d %02d:%02d", ti.tm_mday, ti.tm_mon, ti.tm_year + 1900, ti.tm_hour, ti.tm_min);
+          snprintf(timestamp, MINIBUFLEN, "%02d.%02d.%04d %02d:%02d", ti.tm_mday, ti.tm_mon, ti.tm_year + 1900, ti.tm_hour, ti.tm_min);
         }
       }
       int cirestate = get_cire_state();
@@ -682,7 +682,7 @@ void serial_process_command(String s, String processing_mode, bool persist_selec
       char decoded_string[decoded_length + 1];
       Base64ren.decode(decoded_string, buffer, b64msg_len);
 
-      if (decoded_length > 0)
+      if ((decoded_length > 0) && (decoded_length <= RDCP_MAX_PAYLOAD_SIZE_LORA))
       {
         serial_writeln("INFO: LoRa Radio received packet.");
         simrx_buffer_length = decoded_length;

@@ -118,6 +118,7 @@ void addMyMulticastAddress(uint16_t ma)
 
 bool matchesMyMulticastAddress(uint16_t ma)
 {
+  if (ma == 0x0000) return false;
   for (int i=0; i<5; i++)
   {
     if (MY_MULTICAST_ADDRESSES[i] == ma) return true;
@@ -127,6 +128,7 @@ bool matchesMyMulticastAddress(uint16_t ma)
 
 uint16_t getEntryPoint(uint8_t num)
 {
+  if (5 <= num) return 0x0201;
   return MY_ENTRY_POINTS[num];
 }
 
@@ -136,9 +138,10 @@ uint16_t getSuggestedRelay(uint8_t retry=0)
   if ((retry == 0) && (roam != RDCP_NO_ADDRESS)) return roam;
   uint8_t index = 0;
   uint16_t da = getEntryPoint(index);
-  for (int i=0; i<retry; i++)
+  if (retry == 1) return da;
+  for (int i=1; i<retry; i++)
   {
-    uint16_t new_da = getEntryPoint(index%5);
+    uint16_t new_da = getEntryPoint(i%5);
     if (new_da != RDCP_NO_ADDRESS) da = new_da;
   }
   return da;
@@ -146,6 +149,7 @@ uint16_t getSuggestedRelay(uint8_t retry=0)
 
 uint16_t getMulticastAddress(uint8_t num)
 {
+  if (5 <= num) return 0x0000;
   return MY_MULTICAST_ADDRESSES[num];
 }
 bool matchesMyDeviceAddress(uint16_t rdcpa)
@@ -155,6 +159,7 @@ bool matchesMyDeviceAddress(uint16_t rdcpa)
 
 bool matchesAnyOfMyAddresses(uint16_t rdcpa)
 {
+  if (rdcpa == 0x0000) return false;
   return ((rdcpa == RDCP_ADDRESS_BROADCAST) || matchesMyDeviceAddress(rdcpa) || matchesMyMulticastAddress(rdcpa));
 }
 

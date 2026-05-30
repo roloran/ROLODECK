@@ -51,13 +51,15 @@ int64_t cire_starttime = NO_TIMESTAMP; // When was the CIRE sent?
 #define CIRE_STATE_WAIT_DA 1
 #define CIRE_STATE_WAIT_HQ 2
 uint8_t  cire_state = CIRE_STATE_NONE;
-uint16_t cire_seqnrs[]= {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0};
+uint16_t cire_seqnrs[]= {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0};
 uint16_t cire_current_seqnr = RDCP_NO_SEQUENCE_NUMBER;
 uint8_t  cire_current_subtype = 0x00;
 uint16_t cire_current_refnr = RDCP_NO_REFERENCE_NUMBER;
 char     cire_current_text[INFOLEN];
 uint16_t cire_guitext_num = 1;
 uint16_t cire_current_ep = RDCP_NO_ADDRESS;
+
+extern bool gui_cire_buttons_currently_disabled;
 
 int64_t rdcp_get_channel_free_estimation(uint8_t channel)
 {
@@ -377,11 +379,30 @@ bool rdcp_mg_process_rxed_lora_packet(uint8_t *lora_packet, uint16_t lora_packet
     return false;
   }
 
+  if (lora_packet_length > 200)
+  {
+    serial_writeln("WARNING: LoRa packet larger than 200 bytes, not processing");
+    return false;
+  }
+
   /* Copy the message to process into the rdcp_msg_in data structure */
   memcpy(&rdcp_msg_in.header, lora_packet, RDCP_HEADER_SIZE);
   memcpy(&rdcp_msg_in.payload.data, lora_packet + RDCP_HEADER_SIZE, lora_packet_length - RDCP_HEADER_SIZE);
 
-  /* Verify the CRC-16 checksum */
+  /* Perform basic sanity checks */
+  if ((RDCP_HEADER_SIZE + rdcp_msg_in.header.rdcp_payload_length) != lora_packet_length)
+  {
+    serial_writeln("WARNING: Size given in RDCP header does not match LoRa packet size + header size, ignoring");
+    return false;
+  }
+
+  if (rdcp_msg_in.header.rdcp_payload_length > 184)
+  {
+    serial_writeln("WARNING: RDCP Payload size too big, ignoring");
+    return false;
+  }
+
+  /* Verify the CRC-16 checksum after those basic checks */
   if (!rdcp_check_crc_in(lora_packet_length))
   {
     serial_writeln("INFO: RDCP checksum mismatch - not processing");
@@ -539,11 +560,15 @@ uint16_t airtime_in_ms_mgchannel(uint8_t payload_size)
   double time_for_preamble = (number_of_preamble_symbols + 4.25) * time_per_symbol;
 
   /* Calculate the airtime for the payload */
-  double number_of_payload_symbols = 8 + max((coding_rate + 4)*ceil((8 * payload_size - 4 * SF + 28 + 16 - 20 * implicit_header_mode) / (4*(SF - 2*low_data_rate_optimization))), 0.0);
+  double payload_symbol_arg =
+         (8.0 * payload_size - 4.0 * SF + 28.0 + 16.0 - 20.0 * implicit_header_mode) /
+         (4.0 * (SF - 2.0 * low_data_rate_optimization));
+  double number_of_payload_symbols =
+         8.0 + max((coding_rate + 4.0) * ceil(payload_symbol_arg), 0.0);
   double time_for_payload = number_of_payload_symbols * time_per_symbol;
 
   /* Sum it up, converting from seconds to milliseconds and from Double to Int */
-  time_for_packet = (uint16_t) (1000 * (time_for_preamble + time_for_payload));
+  time_for_packet = (uint16_t) ceil(1000.0 * (time_for_preamble + time_for_payload));
 
   most_recent_airtime = time_for_packet;
 
@@ -569,11 +594,15 @@ uint16_t airtime_in_ms(uint8_t payload_size)
   double time_for_preamble = (number_of_preamble_symbols + 4.25) * time_per_symbol;
 
   /* Calculate the airtime for the payload */
-  double number_of_payload_symbols = 8 + max((coding_rate + 4)*ceil((8 * payload_size - 4 * SF + 28 + 16 - 20 * implicit_header_mode) / (4*(SF - 2*low_data_rate_optimization))), 0.0);
+  double payload_symbol_arg =
+         (8.0 * payload_size - 4.0 * SF + 28.0 + 16.0 - 20.0 * implicit_header_mode) /
+         (4.0 * (SF - 2.0 * low_data_rate_optimization));
+  double number_of_payload_symbols =
+         8.0 + max((coding_rate + 4.0) * ceil(payload_symbol_arg), 0.0);
   double time_for_payload = number_of_payload_symbols * time_per_symbol;
 
   /* Sum it up, converting from seconds to milliseconds and from Double to Int */
-  time_for_packet = (uint16_t) (1000 * (time_for_preamble + time_for_payload));
+  time_for_packet = (uint16_t) ceil(1000.0 * (time_for_preamble + time_for_payload));
 
   most_recent_airtime = time_for_packet;
 
@@ -966,6 +995,8 @@ void rdcp_mg_process_incoming_message(bool is_duplicate)
   uint16_t dest = rdcp_msg_in.header.destination;
   uint16_t me   = getMyRDCPAddress();
 
+  if (dest == 0x0000) return; // invalid destination address, do not process
+
   /* Skip RDCP Message processing unless it matches my RDCP address,
      any of my multicast addresses, or the broadcast address */
   if (!matchesAnyOfMyAddresses(dest)) return;
@@ -982,6 +1013,9 @@ void rdcp_mg_process_incoming_message(bool is_duplicate)
     }
     else
     {
+      /* In the current implementation state of all MERLIN software packages, 
+         OAs to multicast groups are not encrypted, only authenticated,
+         and thus processed the same way as public OAs to the broadcast address. */
       rdcp_mg_process_incoming_public_oa();
     }
   }
@@ -1046,6 +1080,13 @@ uint8_t txq_overrun_counter = 0;
 bool rdcp_txqueue_add(uint8_t channel, uint8_t *data, uint8_t len, bool important, bool force_tx, uint8_t callback_selector, int64_t forced_time=0)
 {
   char info[INFOLEN];
+
+  if (RDCP_MAX_PAYLOAD_SIZE_LORA < len)
+  {
+    serial_writeln("ERROR: Message too long, won't queue");
+    return false;
+  }
+  
   int64_t now = my_millis();
   for (int i=0; i < MAX_TXQUEUE_ENTRIES; i++)
   {
@@ -1394,6 +1435,12 @@ bool rdcp_txaheadqueue_add(uint8_t channel, uint8_t *data, uint8_t len, bool imp
     return false;
   }
 
+  if (RDCP_MAX_PAYLOAD_SIZE_LORA < len)
+  {
+    serial_writeln("ERROR: Message too long, won't queue");
+    return false;
+  }
+
   int64_t now = my_millis();
 
   for (int i=0; i < MAX_TXAHEADQUEUE_ENTRIES; i++)
@@ -1467,6 +1514,12 @@ bool rdcp_tx_interface(String b64rdcpmsg, int64_t time=TX_WHEN_CF, uint8_t chann
   if (decoded_length < RDCP_HEADER_SIZE)
   {
     serial_writeln("ERROR: Message too short to be an RDCP Message, refusing to schedule.");
+    return false;
+  }
+
+  if (decoded_length > RDCP_MAX_PAYLOAD_SIZE_LORA)
+  {
+    serial_writeln("ERROR: Message too long to be an RDCP Message, refusing to schedule.");
     return false;
   }
 
@@ -1648,18 +1701,17 @@ bool rdcp_callback_cad(bool cad_busy)
 
   last_tx_activity = my_millis();
 
-  snprintf(buf, INFOLEN, "INFO: Send-processing: CAD reports channel %d %s (try %d for TXQi%d)", 
-    current_channel, channel_free ? "free" : "busy", txq.entries[tx_ongoing].cad_retry + 1, tx_ongoing);
-  serial_writeln(buf);
-
   if (tx_ongoing == -1)
   {
     serial_writeln("WARNING: CAD attempted without ongoing transmission");
-    // lora_radio_receivemode();
     radio_switch_channel(CHANNEL868DA);
     current_channel = CHANNEL868DA;
     return false;
   }
+
+  snprintf(buf, INFOLEN, "INFO: Send-processing: CAD reports channel %d %s (try %d for TXQi%d)", 
+    current_channel, channel_free ? "free" : "busy", txq.entries[tx_ongoing].cad_retry + 1, tx_ongoing);
+  serial_writeln(buf);
 
   txq.entries[tx_ongoing].cad_retry += 1;
   uint8_t retry = txq.entries[tx_ongoing].cad_retry;
@@ -2122,6 +2174,12 @@ void rdcp_send_cire(uint8_t subtype, uint16_t refnr, char *text)
   memset(buf, 0, sizeof(buf));
   int c_total = unishox2_compress_simple(text, len, buf);
 
+  if (165 < c_total)
+  {
+    serial_writeln("ERROR: Unishox data too long, cannot send full CIRE");
+    c_total = 165;
+  }
+
   /* Fill the RDCP Payload with the Unishox2 content */
   for (int i=0; i < c_total; i++)
   {
@@ -2276,7 +2334,7 @@ void rdcp_heartbeat_check(void)
 
 void rdcp_mg_process_incoming_private_oa(bool is_duplicate)
 {
-  /* Official Announcements sent to a single device are symetrically encrypted. */
+  /* Official Announcements sent to a single device are symmetrically encrypted. */
   uint8_t ciphertext[DATABUFLEN];
   uint8_t plaintext[DATABUFLEN];
   uint8_t iv[12];
@@ -2295,6 +2353,8 @@ void rdcp_mg_process_incoming_private_oa(bool is_duplicate)
   iv[6] = rdcp_msg_in.header.message_type;
   iv[7] = rdcp_msg_in.header.rdcp_payload_length;
   for (int i=0; i<additional_data_size; i++) additional_data[i] = iv[i];
+
+  if (rdcp_msg_in.header.rdcp_payload_length < AESTAGSIZE) return;
 
   for (int i=0; i<rdcp_msg_in.header.rdcp_payload_length - AESTAGSIZE; i++) ciphertext[i] = rdcp_msg_in.payload.data[i];
   for (int i=0; i<16; i++) gcmauthtag[i] = rdcp_msg_in.payload.data[rdcp_msg_in.header.rdcp_payload_length - AESTAGSIZE + i];
@@ -2330,18 +2390,30 @@ void rdcp_mg_process_incoming_private_oa(bool is_duplicate)
     {
       added = mb_add_external_message(oa, get_current_rdcp_msg_base64(), rdcp_msg_in.header.origin, rdcp_msg_in.header.sequence_number,
        refnr, morefragments, lifetime, RELEVANT_FOR_DISPLAYING, RELEVANCE_FOR_THIS_DEVICE_ONLY, true, true, subtype);
+      if (added && !gui_cire_buttons_currently_disabled)
+      {
+        gui_switch_red_button_mode(RED_BUTTON_MODE_EMERGENCY);
+      }
       if (added && (gui_get_current_screen() == SCREEN_OANONCRISIS)) gui_transition_to_screen(SCREEN_OACRISIS);
     }
     else if (subtype == RDCP_MSGTYPE_OA_SUBTYPE_NONCRISIS)
     {
       added = mb_add_external_message(oa, get_current_rdcp_msg_base64(), rdcp_msg_in.header.origin, rdcp_msg_in.header.sequence_number,
        refnr, morefragments, lifetime, RELEVANT_FOR_DISPLAYING, RELEVANCE_FOR_THIS_DEVICE_ONLY, false, true, subtype);
+      if (added && !gui_cire_buttons_currently_disabled)
+      {
+        gui_switch_red_button_mode(RED_BUTTON_MODE_EMERGENCY);
+      }
       if (added && (gui_get_current_screen() != SCREEN_OANONCRISIS)) gui_transition_to_screen(SCREEN_OANONCRISIS);
     }
     else if (subtype == RDCP_MSGTYPE_OA_SUBTYPE_FEEDBACK)
     {
       added = mb_add_external_message(oa, get_current_rdcp_msg_base64(), rdcp_msg_in.header.origin, rdcp_msg_in.header.sequence_number,
        refnr, morefragments, lifetime, RELEVANT_FOR_DISPLAYING, RELEVANCE_FOR_THIS_DEVICE_ONLY, true, true, subtype);
+      if (added && !gui_cire_buttons_currently_disabled)
+      {
+        gui_switch_red_button_mode(RED_BUTTON_MODE_EMERGENCY);
+      }
       if (added && (gui_get_current_screen() == SCREEN_OANONCRISIS)) gui_transition_to_screen(SCREEN_OACRISIS);
     }
     else if (subtype == RDCP_MSGTYPE_OA_SUBTYPE_INQUIRY)
@@ -2349,7 +2421,8 @@ void rdcp_mg_process_incoming_private_oa(bool is_duplicate)
       added = mb_add_external_message(oa, get_current_rdcp_msg_base64(), rdcp_msg_in.header.origin, rdcp_msg_in.header.sequence_number,
        refnr, morefragments, lifetime, RELEVANT_FOR_DISPLAYING, RELEVANCE_FOR_THIS_DEVICE_ONLY, true, true, subtype);
 
-      if (!is_duplicate && added)
+      // if (!is_duplicate && added) // Intended to ignore old inquiries when sent as periodics, but prone to HQ message race conditions
+      if (added)
       {
         // lv_textarea_set_text(ui_TextAreaRESPoa, oa);
         gui_resp_add_text(oa);
@@ -2383,6 +2456,8 @@ void set_current_inquiry_refnr(uint16_t value)
 
 void rdcp_mg_process_incoming_public_oa(void)
 {
+  if (rdcp_msg_in.header.rdcp_payload_length < 6) return;
+
   /* Official Announcements to broadcast/multicast addresses are unencrypted, but have separate signatures. */
   uint8_t subtype = rdcp_msg_in.payload.data[0];
   uint16_t refnr = rdcp_msg_in.payload.data[1] + 256 * rdcp_msg_in.payload.data[2];
@@ -2400,6 +2475,7 @@ void rdcp_mg_process_incoming_public_oa(void)
     int msg_len = rdcp_msg_in.header.rdcp_payload_length - 6; // without OA Subheader
     char oa[1024];
     unsigned int len = unishox2_decompress_simple((char*)uuContent, msg_len, oa);
+    if (1023 < len) len = 1023;
     oa[len] = 0;
 
     snprintf(info, FATLEN, "INFO: Received Public OA, type %02X, refnr %04X, content: %s", subtype, refnr, oa);
@@ -2409,12 +2485,20 @@ void rdcp_mg_process_incoming_public_oa(void)
     {
       added = mb_add_external_message(oa, get_current_rdcp_msg_base64(), rdcp_msg_in.header.origin, rdcp_msg_in.header.sequence_number,
        refnr, morefragments, lifetime, RELEVANT_FOR_DISPLAYING, RELEVANCE_FOR_EVERYONE, true, false, subtype);
+      if (added && !gui_cire_buttons_currently_disabled)
+      {
+        gui_switch_red_button_mode(RED_BUTTON_MODE_EMERGENCY);
+      }
       if (added && (gui_get_current_screen() == SCREEN_OANONCRISIS)) gui_transition_to_screen(SCREEN_OACRISIS);
     }
     else if (subtype == RDCP_MSGTYPE_OA_SUBTYPE_NONCRISIS)
     {
       added = mb_add_external_message(oa, get_current_rdcp_msg_base64(), rdcp_msg_in.header.origin, rdcp_msg_in.header.sequence_number,
        refnr, morefragments, lifetime, RELEVANT_FOR_DISPLAYING, RELEVANCE_FOR_EVERYONE, false, false, subtype);
+      if (added && !gui_cire_buttons_currently_disabled)
+      {
+        gui_switch_red_button_mode(RED_BUTTON_MODE_EMERGENCY);
+      }
       if (added && (gui_get_current_screen() != SCREEN_OANONCRISIS)) gui_transition_to_screen(SCREEN_OANONCRISIS);
     }
     else if (subtype == RDCP_MSGTYPE_OA_SUBTYPE_INQUIRY)
@@ -2423,7 +2507,10 @@ void rdcp_mg_process_incoming_public_oa(void)
           INQUIRY messages should only be sent to a single device and thus not be handled here.
           However, this might become relevant for later use-cases.
       */
-      added = mb_add_external_message(oa, get_current_rdcp_msg_base64(), rdcp_msg_in.header.origin, rdcp_msg_in.header.sequence_number,
+      char oa2[1024];
+      snprintf(oa2, 1024, "Anfrage an Gruppe: %s", oa);
+
+      added = mb_add_external_message(oa2, get_current_rdcp_msg_base64(), rdcp_msg_in.header.origin, rdcp_msg_in.header.sequence_number,
        refnr, morefragments, lifetime, RELEVANT_FOR_DISPLAYING, RELEVANCE_FOR_EVERYONE, true, false, subtype);
 
       if (added)
@@ -2447,6 +2534,11 @@ void rdcp_mg_process_incoming_public_oa(void)
 
 void rdcp_mg_process_signature(void)
 {
+  if (rdcp_msg_in.header.rdcp_payload_length < (RDCP_SIGNATURE_LENGTH + 2))
+  {
+    serial_writeln("WARNING: RDCP signature message too short to be valid");
+    return;
+  }
   uint16_t refnr = rdcp_msg_in.payload.data[0] + 256 * rdcp_msg_in.payload.data[1];
   uint8_t schnorrsig[SIGBUFLEN];
   for (int i=0; i<rdcp_msg_in.header.rdcp_payload_length - 2; i++) schnorrsig[i] = rdcp_msg_in.payload.data[i+2];
@@ -2679,7 +2771,7 @@ void rdcp_blockdevice_lock(uint16_t duration)
 
   locke.duration = duration;
   locke.time_added = my_millis();
-  locke.absexp = tdeck_get_time() ? tdeck_get_time() + 60*duration : 0;
+  locke.absexp = tdeck_get_time() ? tdeck_get_time() + SECONDS_TO_MILLISECONDS*60*duration : 0;
 
   if (hasStorage)
   {
@@ -2731,7 +2823,7 @@ void rdcp_blockdevice_check(void)
       if (locke.absexp < now) rdcp_blockdevice_unlock(); // absolute timer expired
     }
     if (my_millis() < locke.time_added) locke.time_added = my_millis(); // reset monotonic counter after power cycle
-    if (my_millis() > locke.time_added + 60 * locke.duration) rdcp_blockdevice_unlock(); // relative timer expired
+    if (my_millis() > locke.time_added + SECONDS_TO_MILLISECONDS * 60 * locke.duration) rdcp_blockdevice_unlock(); // relative timer expired
   }
 
   return;

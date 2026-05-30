@@ -43,12 +43,12 @@ Arduino_GFX *gfx     = new Arduino_ST7789(bus, GFX_NOT_DEFINED /* RST */, 1 /* r
 
 /* -------------------------------------------------------------------------- */
 
-int64_t timestamp_last_activity   = my_millis();
+volatile int64_t timestamp_last_activity   = my_millis();
 int64_t timestamp_screensaver_off = my_millis();
 bool    tdeck_screensaver_is_on   = false;
 bool    tdeck_display_is_on       = true;
 bool    tdeck_has_fatfs           = true;
-bool    gui_need_screen_refresh   = false;
+volatile bool    gui_need_screen_refresh   = false;
 bool    we_have_the_lock          = false;
 
 SemaphoreHandle_t highlander = NULL;
@@ -298,15 +298,15 @@ static lv_disp_draw_buf_t draw_buf;
 static lv_color_t *disp_draw_buf, *disp_draw_buf2;
 static lv_disp_drv_t disp_drv;
 
-bool keyboard_interrupted = false;
+volatile bool keyboard_interrupted = false;
 
-int64_t next_key_scan_ms = 0;
-bool trackball_interrupted = false;
-int16_t trackball_up_count = 0;
-int16_t trackball_down_count = 0;
-int16_t trackball_left_count = 0;
-int16_t trackball_right_count = 0;
-int16_t trackball_click_count = 0;
+volatile int64_t next_key_scan_ms = 0;
+volatile bool trackball_interrupted = false;
+volatile int16_t trackball_up_count = 0;
+volatile int16_t trackball_down_count = 0;
+volatile int16_t trackball_left_count = 0;
+volatile int16_t trackball_right_count = 0;
+volatile int16_t trackball_click_count = 0;
 
 void IRAM_ATTR ISR_key()
 {

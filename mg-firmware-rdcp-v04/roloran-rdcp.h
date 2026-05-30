@@ -16,7 +16,8 @@
 #define RDCP_HQ_MULTICAST_ADDRESS 0x00FF
 
 /// RDCP v0.4 fixed maximum LoRa Payload size
-#define RDCP_MAX_PAYLOAD_SIZE 200
+#define RDCP_MAX_PAYLOAD_SIZE_LORA 200
+#define RDCP_MAX_PAYLOAD_SIZE_INNER 184
 
 /// Constants for both LoRa channels
 #define CHANNEL433 0
@@ -50,7 +51,7 @@ struct rdcp_header {
   * Data structure for storing the RDCP v0.4 Payload of an RDCP Message
   */
 struct rdcp_payload {
-  uint8_t data[RDCP_MAX_PAYLOAD_SIZE];            // RDCP payload must not exceed 200 bytes
+  uint8_t data[RDCP_MAX_PAYLOAD_SIZE_INNER]; 
 };
 
 /**
@@ -295,7 +296,7 @@ bool rdcp_txqueue_loop(void);
   * Data structure for a TX Queue entry.
   */
 struct txqueue_entry {
-  uint8_t payload[RDCP_HEADER_SIZE + RDCP_MAX_PAYLOAD_SIZE];       //< data of the outgoing message
+  uint8_t payload[RDCP_MAX_PAYLOAD_SIZE_LORA];  //< data of the outgoing message
   uint8_t payload_length = 0;                   //< length of the outgoing message
   int64_t currently_scheduled_time = NO_TIMESTAMP;         //< timestamp when to transmit
   int64_t originally_scheduled_time = NO_TIMESTAMP;        //< timestamp when originally planned to transmit
@@ -340,7 +341,7 @@ bool rdcp_txaheadqueue_add(uint8_t channel, uint8_t *data, uint8_t len, bool imp
   * Data structure for a TX Ahead Queue entry.
   */
 struct txaheadqueue_entry {
-  uint8_t payload[RDCP_MAX_PAYLOAD_SIZE];       //< data of the outgoing message
+  uint8_t payload[RDCP_MAX_PAYLOAD_SIZE_LORA];  //< data of the outgoing message
   uint8_t payload_length = 0;                   //< length of the outgoing message
   int64_t scheduled_time = NO_TIMESTAMP;        //< timestamp when to move to the TX Queue
   bool important = false;                       //< message is important and should not be dropped even it if takes longer

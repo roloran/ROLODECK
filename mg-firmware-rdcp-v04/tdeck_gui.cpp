@@ -279,7 +279,7 @@ void gui_switch_red_button_mode(uint8_t new_mode)
     red_button_mode = RED_BUTTON_MODE_EMERGENCY;
     gui_enable_cire_buttons();
   }
-  else
+  else if (new_mode == RED_BUTTON_MODE_INQUIRY)
   {
     gui_enable_cire_buttons();
     tdeck_loop();
@@ -292,6 +292,10 @@ void gui_switch_red_button_mode(uint8_t new_mode)
     lv_obj_set_style_bg_color(ui_ButtonCIRE, lv_color_hex(0x444444), LV_PART_MAIN | LV_STATE_DEFAULT);
     set_gui_needs_screen_refresh(true);
     tdeck_loop();
+  }
+  else
+  {
+    serial_writeln("WARNING: gui_switch_red_button_mode() with invalid mode %" PRIu8, new_mode);
   }
   return;
 }
