@@ -181,9 +181,9 @@ uint16_t rdcpcsv_logfile_count   = 0;
 void rdcpcsv_logfile_set_status(bool enabled)
 {
   rdcpcsv_logfile_enabled = enabled;
-  if (enabled) 
+  if (enabled)
     serial_writeln("INFO: RDCPCSV Logfile enabled");
-  else 
+  else
     serial_writeln("INFO: RDCPCSV Logfile disabled");
   return;
 }
@@ -252,10 +252,10 @@ void print_rdcp_csv(void)
     refnr = rdcp_msg_in.payload.data[0] + 256 * rdcp_msg_in.payload.data[1];
   }
 
-  snprintf(info, FATLEN, "RDCPCSV: %04X,%" PRId64 ",%" PRId64 ",%" PRId64 ",%" PRId64 ",%d,%04X,%d,%04X,%04X,%04X,%04X,%02X,%d,%02X,%02X,%02X,%04X,%d,%3.3f,%d,%d", 
+  snprintf(info, FATLEN, "RDCPCSV: %04X,%" PRId64 ",%" PRId64 ",%" PRId64 ",%" PRId64 ",%d,%04X,%d,%04X,%04X,%04X,%04X,%02X,%d,%02X,%02X,%02X,%04X,%d,%3.3f,%d,%d",
     getMyRDCPAddress(),
     now - last_csv_timestamp,
-    now, 
+    now,
     CFEst,
     CFEst - now,
     rdcp_msg_in.header.rdcp_payload_length + RDCP_HEADER_SIZE,
@@ -274,7 +274,7 @@ void print_rdcp_csv(void)
     most_recent_airtime,
     getMyLoRaFrequency(),
     getReceiveRSSI(),
-    getReceiveSNR()    
+    getReceiveSNR()
   );
   serial_writeln(info);
   rdcpcsv_logfile_append(info);
@@ -289,17 +289,17 @@ bool repeater_mode = false;
 void rdcp_repeater(void)
 {
   if (!repeater_mode) return;
-  /* 
+  /*
     In repeater mode, we send selected non-duplicate incoming RDCP Messages
     on the same channel again when it is free.
-    As this can up to double the load on the channel in our range, it should 
-    be used very sparsely on only very few devices. 
-    When used with a 433 MHz T-Deck, it can be used for testing new or additional 
-    DA placements. Prefer to use a proper RDCP Relay with appropriately 
-    configured topology whenever possible. 
-    For 868 MHz MGs, this functionality may extend the range of coverage 
+    As this can up to double the load on the channel in our range, it should
+    be used very sparsely on only very few devices.
+    When used with a 433 MHz T-Deck, it can be used for testing new or additional
+    DA placements. Prefer to use a proper RDCP Relay with appropriately
+    configured topology whenever possible.
+    For 868 MHz MGs, this functionality may extend the range of coverage
     when households are too far away from their nearest DA/Relay. However,
-    this will only work as expected for stationary use. Mobile use 
+    this will only work as expected for stationary use. Mobile use
     except for placement testing should be avoided.
   */
 
@@ -307,7 +307,7 @@ void rdcp_repeater(void)
   if (
     // (rdcp_msg_in.header.message_type == RDCP_MSGTYPE_DA_STATUS_REQUEST) || // useful for HQs in need of a repeater
     (rdcp_msg_in.header.message_type == RDCP_MSGTYPE_DA_STATUS_RESPONSE) ||
-    (rdcp_msg_in.header.message_type == RDCP_MSGTYPE_DELIVERY_RECEIPT) || 
+    (rdcp_msg_in.header.message_type == RDCP_MSGTYPE_DELIVERY_RECEIPT) ||
     (rdcp_msg_in.header.message_type == RDCP_MSGTYPE_FETCH_ALL_NEW_MESSAGES) ||
     (rdcp_msg_in.header.message_type == RDCP_MSGTYPE_FETCH_MESSAGE) ||
     (rdcp_msg_in.header.message_type == RDCP_MSGTYPE_HEARTBEAT) ||
@@ -332,11 +332,11 @@ void rdcp_repeater(void)
   rm.header.counter = 0; /* one-shot only */
   if (getMyLoRaFrequency() < 500)
   { // don't re-start interrupted propagation cycles on the 433 MHz band
-    rm.header.relay1 = RDCP_HEADER_RELAY_MAGIC_NONE; 
-    rm.header.relay2 = RDCP_HEADER_RELAY_MAGIC_NONE; 
-    rm.header.relay3 = RDCP_HEADER_RELAY_MAGIC_NONE; 
+    rm.header.relay1 = RDCP_HEADER_RELAY_MAGIC_NONE;
+    rm.header.relay2 = RDCP_HEADER_RELAY_MAGIC_NONE;
+    rm.header.relay3 = RDCP_HEADER_RELAY_MAGIC_NONE;
   }
-  else 
+  else
   {
     rm.header.relay1 = rdcp_msg_in.header.relay1;
     rm.header.relay2 = rdcp_msg_in.header.relay2;
@@ -358,9 +358,9 @@ void rdcp_repeater(void)
   /* Schedule the outgoing message for sending */
   uint8_t data[DATABUFLEN];
   memcpy(&data, &rm.header, RDCP_HEADER_SIZE);
-  for (int i=0; i<rm.header.rdcp_payload_length; i++) 
+  for (int i=0; i<rm.header.rdcp_payload_length; i++)
     data[i + RDCP_HEADER_SIZE] = rm.payload.data[i];
-  rdcp_txqueue_add(CHANNEL868DA, data, RDCP_HEADER_SIZE + rm.header.rdcp_payload_length, 
+  rdcp_txqueue_add(CHANNEL868DA, data, RDCP_HEADER_SIZE + rm.header.rdcp_payload_length,
                    NOTIMPORTANT, NOTFORCEDTX, TX_CALLBACK_NONE, TX_WHEN_CF);
 
   return;
@@ -455,7 +455,7 @@ bool rdcp_mg_process_rxed_lora_packet(uint8_t *lora_packet, uint16_t lora_packet
       */
       if (
           (
-            (rdcp_msg_in.header.message_type != RDCP_MSGTYPE_OFFICIAL_ANNOUNCEMENT) && 
+            (rdcp_msg_in.header.message_type != RDCP_MSGTYPE_OFFICIAL_ANNOUNCEMENT) &&
             (rdcp_msg_in.header.message_type != RDCP_MSGTYPE_SIGNATURE)
           )
           ||
@@ -464,9 +464,9 @@ bool rdcp_mg_process_rxed_lora_packet(uint8_t *lora_packet, uint16_t lora_packet
             (rdcp_msg_in.header.sequence_number == most_recent_seqnr)
           )
         ) return false;
-      
+
       /* Don't accept duplicate OAs/Signatures after longer uptime or in HQ mode to improve device responsiveness */
-      if ((rdcp_msg_in.header.message_type == RDCP_MSGTYPE_OFFICIAL_ANNOUNCEMENT) || 
+      if ((rdcp_msg_in.header.message_type == RDCP_MSGTYPE_OFFICIAL_ANNOUNCEMENT) ||
           (rdcp_msg_in.header.message_type == RDCP_MSGTYPE_SIGNATURE))
       {
         if ((my_millis() > 120 * MINUTES_TO_MILLISECONDS) || hq_mode) return false;
@@ -474,12 +474,12 @@ bool rdcp_mg_process_rxed_lora_packet(uint8_t *lora_packet, uint16_t lora_packet
     }
   }
 
-  most_recent_origin = rdcp_msg_in.header.origin; 
+  most_recent_origin = rdcp_msg_in.header.origin;
   most_recent_seqnr  = rdcp_msg_in.header.sequence_number;
 
   /*
     If the received message is a CIRE sent by another MG, we should try to keep the channel
-    free for the EP DA's ACK reply. 
+    free for the EP DA's ACK reply.
     However, disable this in HQ mode.
   */
   if (!hq_mode && (current_channel == CHANNEL868DA))
@@ -659,7 +659,7 @@ void rdcp_update_channel_free_estimator_rx(void)
     if (rdcp_msg_in.header.relay1 == 0xEE) future_timeslots = 0; // also RDCP-Relay default on 868 MHz
 
     if (hq_mode && (future_timeslots == 0))
-    { 
+    {
       // As HQ RDCP modem on 868 MHz, we recommend to keep the channel free until DAs
       // has their timeslot to forward new messages to MGs in their area
       uint8_t sending_relay_id = rdcp_msg_in.header.sender & 0x0F;
@@ -681,7 +681,7 @@ void rdcp_update_channel_free_estimator_rx(void)
   rdcp_update_channel_free_estimation(channel_free_at);
 
   char buf[INFOLEN];
-  snprintf(buf, INFOLEN, "INFO: Channel %d free estimation: +%zu ms, @%llu ms (airtime %u ms, retrans %zu ms, timeslot %zu ms, %d fut ts)", 
+  snprintf(buf, INFOLEN, "INFO: Channel %d free estimation: +%zu ms, @%llu ms (airtime %u ms, retrans %zu ms, timeslot %zu ms, %d fut ts)",
     current_channel, channel_free_after, channel_free_at, airtime, remaining_current_sender_time, timeslot_duration, future_timeslots);
   serial_writeln(buf);
 
@@ -1013,7 +1013,7 @@ void rdcp_mg_process_incoming_message(bool is_duplicate)
     }
     else
     {
-      /* In the current implementation state of all MERLIN software packages, 
+      /* In the current implementation state of all MERLIN software packages,
          OAs to multicast groups are not encrypted, only authenticated,
          and thus processed the same way as public OAs to the broadcast address. */
       rdcp_mg_process_incoming_public_oa();
@@ -1027,9 +1027,9 @@ void rdcp_mg_process_incoming_message(bool is_duplicate)
   if (mt == RDCP_MSGTYPE_MAINTENANCE) rdcp_mg_process_maintenance();
   if (mt == RDCP_MSGTYPE_DEVICE_BLOCK_ALERT) rdcp_mg_process_blockalert();
 
-  if ((mt == RDCP_MSGTYPE_CITIZEN_REPORT) && 
+  if ((mt == RDCP_MSGTYPE_CITIZEN_REPORT) &&
       (rdcp_msg_in.header.origin == getMyRDCPAddress()) &&
-      (rdcp_msg_in.header.sender == cire_current_ep) &&
+      // (rdcp_msg_in.header.sender == cire_current_ep) && // we can actually treat anyone else sending our CIRE as implicit EP ACK
       (cire_state == CIRE_STATE_WAIT_DA)
   )
   { /* Fallback if we missed the real EP DA ACK */
@@ -1086,24 +1086,24 @@ bool rdcp_txqueue_add(uint8_t channel, uint8_t *data, uint8_t len, bool importan
     serial_writeln("ERROR: Message too long, won't queue");
     return false;
   }
-  
+
   int64_t now = my_millis();
   for (int i=0; i < MAX_TXQUEUE_ENTRIES; i++)
   {
     if (!txq.entries[i].waiting) continue;
     snprintf(info, INFOLEN, "INFO: Previous TXQ i:%02d w:%s f:%s i:%s, o:%" PRId64 ", c:%" PRId64 ", r:%" PRId64,
-      i, 
+      i,
       txq.entries[i].waiting ? "W" : "nW",
       txq.entries[i].force_tx ? "F" : "nF",
       txq.entries[i].important ? "I" : "nI",
-      txq.entries[i].originally_scheduled_time, 
+      txq.entries[i].originally_scheduled_time,
       txq.entries[i].currently_scheduled_time,
       txq.entries[i].currently_scheduled_time - now
     );
     serial_writeln(info);
   }
-  snprintf(info, INFOLEN, "INFO: CFEst = %" PRId64 ", rel %" PRId64, 
-    current_channel == CHANNEL868DA ? CFEst : CFEsttx, 
+  snprintf(info, INFOLEN, "INFO: CFEst = %" PRId64 ", rel %" PRId64,
+    current_channel == CHANNEL868DA ? CFEst : CFEsttx,
     current_channel == CHANNEL868DA ? CFEst-now : CFEsttx-now);
   serial_writeln(info);
 
@@ -1168,7 +1168,7 @@ bool rdcp_txqueue_add(uint8_t channel, uint8_t *data, uint8_t len, bool importan
 bool rdcp_txqueue_reschedule(int64_t offset=0)
 {
   int64_t now = my_millis();
-  int64_t delta = current_channel == CHANNEL868DA ? CFEst - now : CFEsttx - now; 
+  int64_t delta = current_channel == CHANNEL868DA ? CFEst - now : CFEsttx - now;
   bool dropped = false;
 
   if (delta < 0) delta = 0;
@@ -1182,20 +1182,20 @@ bool rdcp_txqueue_reschedule(int64_t offset=0)
       if (txq.entries[i].force_tx) continue;
 
       txq.entries[i].num_of_reschedules++;
-      
+
       int64_t next_timestamp = current_channel == CHANNEL868DA ? CFEst : CFEsttx;
       for (int i=0; i < MAX_TXQUEUE_ENTRIES; i++)
       {
           if (txq.entries[i].in_process) continue;
           if (txq.entries[i].force_tx) continue;
           if (!txq.entries[i].waiting) continue;
-          if (txq.entries[i].currently_scheduled_time  < next_timestamp) 
+          if (txq.entries[i].currently_scheduled_time  < next_timestamp)
             next_timestamp = txq.entries[i].currently_scheduled_time;
       }
       int64_t maximum_diff_to_cfest = current_channel == CHANNEL868DA ? CFEst - next_timestamp : CFEsttx - next_timestamp;
 
       int64_t cfe = current_channel == CHANNEL868DA ? CFEst : CFEsttx;
-  
+
       if (txq.entries[i].currently_scheduled_time < cfe + offset)
       {
         txq.entries[i].currently_scheduled_time += maximum_diff_to_cfest + offset;
@@ -1224,19 +1224,19 @@ bool rdcp_txqueue_reschedule(int64_t offset=0)
   {
     if (!txq.entries[i].waiting) continue;
     snprintf(info, INFOLEN, "INFO: Rescheduled TXQ i:%02d w:%s f:%s i:%s nr:%d, o:%" PRId64 ", c:%" PRId64 ", r:%" PRId64,
-      i, 
+      i,
       txq.entries[i].waiting ? "W" : "nW",
       txq.entries[i].force_tx ? "F" : "nF",
       txq.entries[i].important ? "I" : "nI",
       txq.entries[i].num_of_reschedules,
-      txq.entries[i].originally_scheduled_time, 
+      txq.entries[i].originally_scheduled_time,
       txq.entries[i].currently_scheduled_time,
       txq.entries[i].currently_scheduled_time - now
     );
     serial_writeln(info);
   }
-  snprintf(info, INFOLEN, "INFO: CFEst %d = %" PRId64 ", rel %" PRId64, current_channel, 
-    current_channel == CHANNEL868DA ? CFEst : CFEsttx, 
+  snprintf(info, INFOLEN, "INFO: CFEst %d = %" PRId64 ", rel %" PRId64, current_channel,
+    current_channel == CHANNEL868DA ? CFEst : CFEsttx,
     current_channel == CHANNEL868DA ? CFEst-now : CFEsttx - now);
   serial_writeln(info);
 
@@ -1255,7 +1255,7 @@ void rdcp_dump_queues(void)
   {
     if (!txq.entries[i].waiting) continue;
     snprintf(info, INFOLEN, "INFO: QUEUE DUMP TXQ i:%02d, l:%03d c:%02X%02X f:%s i:%s t:%s p:%02d, o:%" PRId64 ", c:%" PRId64 ", r:%" PRId64,
-      i, 
+      i,
       txq.entries[i].payload_length,
       txq.entries[i].payload[RDCP_HEADER_SIZE-1],
       txq.entries[i].payload[RDCP_HEADER_SIZE-2],
@@ -1263,7 +1263,7 @@ void rdcp_dump_queues(void)
       txq.entries[i].important ? "Y" : "N",
       txq.entries[i].in_process ? "Y" : "N",
       txq.entries[i].num_of_reschedules,
-      txq.entries[i].originally_scheduled_time, 
+      txq.entries[i].originally_scheduled_time,
       txq.entries[i].currently_scheduled_time,
       txq.entries[i].currently_scheduled_time - now
     );
@@ -1279,13 +1279,13 @@ void rdcp_dump_queues(void)
   {
     if (!txaq.entries[i].waiting) continue;
     snprintf(info, INFOLEN, "INFO: QUEUE DUMP TXAQ i:%02d, l:%03d c:%02X%02X f:%s i:%s, o:%" PRId64 ", r:%" PRId64,
-      i, 
+      i,
       txaq.entries[i].payload_length,
       txaq.entries[i].payload[RDCP_HEADER_SIZE-1],
       txaq.entries[i].payload[RDCP_HEADER_SIZE-2],
       txaq.entries[i].force_tx ? "Y" : "N",
       txaq.entries[i].important ? "Y" : "N",
-      txaq.entries[i].scheduled_time, 
+      txaq.entries[i].scheduled_time,
       txaq.entries[i].scheduled_time - now
     );
     serial_writeln(info);
@@ -1293,8 +1293,8 @@ void rdcp_dump_queues(void)
   snprintf(info, INFOLEN, "INFO: QUEUE DUMP TXAQ END, num=%02d/%02d", txaq.num_entries, MAX_TXAHEADQUEUE_ENTRIES);
   serial_writeln(info);
 
-  snprintf(info, INFOLEN, "INFO: Now = %" PRId64 " ms, CFEst = %" PRId64 " ms, rel %" PRId64 " ms", now, 
-    current_channel == CHANNEL868DA ? CFEst : CFEsttx, 
+  snprintf(info, INFOLEN, "INFO: Now = %" PRId64 " ms, CFEst = %" PRId64 " ms, rel %" PRId64 " ms", now,
+    current_channel == CHANNEL868DA ? CFEst : CFEsttx,
     current_channel == CHANNEL868DA ? CFEst-now : CFEsttx-now);
   serial_writeln(info);
 
@@ -1312,13 +1312,13 @@ void rdcp_txqueue_compress(void)
     for (int i=0; i < MAX_TXQUEUE_ENTRIES; i++)
     {
       if (txq.entries[i].waiting)
-      { 
-        if ((txq.entries[i].force_tx) || 
+      {
+        if ((txq.entries[i].force_tx) ||
             (txq.entries[i].in_process))
-        { 
-          has_forced_entry = true; 
+        {
+          has_forced_entry = true;
         }
-        if ((earliest == -1) || 
+        if ((earliest == -1) ||
             (txq.entries[i].currently_scheduled_time < txq.entries[earliest].currently_scheduled_time))
         {
           earliest = i;
@@ -1334,10 +1334,10 @@ void rdcp_txqueue_compress(void)
       for (int i=0; i < MAX_TXQUEUE_ENTRIES; i++)
       {
         if (txq.entries[i].waiting)
-        { 
+        {
           if (txq.entries[i].force_tx) { continue; }   // should not happen if we reach this code
           if (txq.entries[i].in_process) { continue; } // same
-          txq.entries[i].currently_scheduled_time -= delta; 
+          txq.entries[i].currently_scheduled_time -= delta;
           char info[INFOLEN];
           snprintf(info, INFOLEN, "INFO: Compressed TXQ entry %d by moving it %" PRId64 " ms",
             i, delta);
@@ -1405,12 +1405,12 @@ bool rdcp_txqueue_loop(void)
   serial_writeln(buf);
 
   if ((current_channel == CHANNEL868DA) && (txq.entries[tx_ongoing].tx_channel == CHANNEL868MG))
-  { 
+  {
     radio_switch_channel(CHANNEL868MG);
     current_channel = CHANNEL868MG;
   }
   if ((current_channel == CHANNEL868MG) && (txq.entries[tx_ongoing].tx_channel == CHANNEL868DA))
-  { 
+  {
     radio_switch_channel(CHANNEL868DA);
     current_channel = CHANNEL868DA;
   }
@@ -1567,7 +1567,7 @@ void rdcp_update_cfest_out(uint8_t len, uint8_t rcnt, uint8_t mt)
   rdcp_update_channel_free_estimation(channel_free_at);
 
   char buf[INFOLEN];
-  snprintf(buf, INFOLEN, "INFO: CFEst4current %d (out): +%zu ms, @%llu ms (airtime %u ms, retrans %zu ms, timeslot %zu ms, %d fut ts)", 
+  snprintf(buf, INFOLEN, "INFO: CFEst4current %d (out): +%zu ms, @%llu ms (airtime %u ms, retrans %zu ms, timeslot %zu ms, %d fut ts)",
     current_channel, channel_free_after, channel_free_at, airtime, remaining_current_sender_time, timeslot_duration, future_timeslots);
   serial_writeln(buf);
 
@@ -1590,7 +1590,7 @@ bool rdcp_send_message_force(void)
   snprintf(buf, INFOLEN, "INFO: TX Start for TXQi %d, len %d, TSd %" PRId64 "ms, latency %" PRId64 " ms", tx_ongoing, txq.entries[tx_ongoing].payload_length, txq.entries[tx_ongoing].timeslot_duration, timediff);
   serial_writeln(buf);
 
-  snprintf(buf, INFOLEN, "TXMETA %d %" PRId64 " %3.3f", txq.entries[tx_ongoing].payload_length, now, 
+  snprintf(buf, INFOLEN, "TXMETA %d %" PRId64 " %3.3f", txq.entries[tx_ongoing].payload_length, now,
     current_channel == CHANNEL868DA ? getMyLoRaFrequency() : getMyLoRaFrequencyTX());
   serial_writeln(buf);
 
@@ -1601,7 +1601,7 @@ bool rdcp_send_message_force(void)
   snprintf(buf, INFOLEN, "TX %s", b64msg);
   serial_writeln(buf);
 
-  rdcp_update_cfest_out(txq.entries[tx_ongoing].payload_length, 
+  rdcp_update_cfest_out(txq.entries[tx_ongoing].payload_length,
                         txq.entries[tx_ongoing].payload[10],
                         txq.entries[tx_ongoing].payload[8]);
   rdcp_txqueue_reschedule(1);
@@ -1709,7 +1709,7 @@ bool rdcp_callback_cad(bool cad_busy)
     return false;
   }
 
-  snprintf(buf, INFOLEN, "INFO: Send-processing: CAD reports channel %d %s (try %d for TXQi%d)", 
+  snprintf(buf, INFOLEN, "INFO: Send-processing: CAD reports channel %d %s (try %d for TXQi%d)",
     current_channel, channel_free ? "free" : "busy", txq.entries[tx_ongoing].cad_retry + 1, tx_ongoing);
   serial_writeln(buf);
 
@@ -1740,7 +1740,7 @@ bool rdcp_callback_cad(bool cad_busy)
     {
       if (CFEst < my_millis() + random_delay) CFEst = my_millis() + random_delay; // Don't re-schedule twice
     }
-    else 
+    else
     {
       if (CFEsttx < my_millis() + random_delay) CFEsttx = my_millis() + random_delay; // Don't re-schedule twice
     }
@@ -1763,7 +1763,7 @@ bool rdcp_callback_cad(bool cad_busy)
     {
       if (CFEst < my_millis() + random_delay) CFEst = my_millis() + random_delay; // Don't re-schedule twice
     }
-    else 
+    else
     {
       if (CFEsttx < my_millis() + random_delay) CFEsttx = my_millis() + random_delay; // Don't re-schedule twice
     }
@@ -2736,7 +2736,7 @@ void rdcp_mg_process_maintenance(void)
       serial_writeln("WARNING: Invalid nonce received for signed RDCP DEVICE MAINTENANCE");
       return;
     }
-    else 
+    else
     {
       serial_writeln("INFO: Entering Maintenance mode");
     }
