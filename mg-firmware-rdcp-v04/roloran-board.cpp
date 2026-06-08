@@ -1089,6 +1089,26 @@ void mb_load_entry(int num)
     }
     histfile.close();
 
+    if (num == 0)
+    {
+        cur_he.local = true;
+        cur_he.display = true;
+        cur_he.forall = true;
+        cur_he.crisis = true;
+        cur_he.signature_available = false;
+        cur_he.signature_verified = false;
+        cur_he.origin = 0;
+        cur_he.seqnr = 0;
+        cur_he.refnr = 0;
+        cur_he.lifetime = 0;
+        cur_he.morefragments = 0;
+        snprintf(cur_he.content_text, CONTENT_TEXT_SIZE, "Willkommen beim MERLIN-Messenger!\n\nHier werden wichtige Informationen der Gemeinde und des Krisenstabs angezeigt. Bitte beachten Sie die Hinweise und Anweisungen in den Nachrichten.\n\nBleiben Sie sicher und informiert!");
+        snprintf(cur_he.content_rdcp, CONTENT_RDCP_SIZE, ""); // empty RDCP content for the welcome message
+        cur_he.timestamp_added = my_millis();
+        cur_he.timestamp_added_abs = tdeck_get_time();
+        cur_he.expiry_absolute = NO_TIMESTAMP; // welcome message does not expire
+    }
+
     return;
 }
 

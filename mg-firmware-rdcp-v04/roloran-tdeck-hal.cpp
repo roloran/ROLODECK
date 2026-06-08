@@ -136,7 +136,7 @@ void check_screensaver_activation(void)
   }
   else
   {
-    if (my_millis_diff(millis(), timestamp_last_activity) <= getScreensaverDelay()) {
+    if (my_millis_diff(my_millis(), timestamp_last_activity) <= getScreensaverDelay()) {
       cpu_high();
       screensaver_off();
     }
@@ -368,7 +368,7 @@ void my_keyboard_read(lv_indev_drv_t *drv, lv_indev_data_t *data)
   {
     if (keyboard_interrupted || (my_millis() > next_key_scan_ms))
     {
-      uint32_t key;
+      uint32_t key = 0;
 
       if (trackball_up_count)
       {

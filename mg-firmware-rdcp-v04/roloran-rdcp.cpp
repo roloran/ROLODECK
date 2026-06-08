@@ -245,11 +245,13 @@ void print_rdcp_csv(void)
   uint16_t refnr = RDCP_NO_REFERENCE_NUMBER;
   if (rdcp_msg_in.header.message_type == RDCP_MSGTYPE_OFFICIAL_ANNOUNCEMENT)
   {
-    refnr = rdcp_msg_in.payload.data[1] + 256 * rdcp_msg_in.payload.data[2];
+    if (rdcp_msg_in.header.rdcp_payload_length >= 3)
+      refnr = rdcp_msg_in.payload.data[1] + 256 * rdcp_msg_in.payload.data[2];
   }
   else if (rdcp_msg_in.header.message_type == RDCP_MSGTYPE_SIGNATURE)
   {
-    refnr = rdcp_msg_in.payload.data[0] + 256 * rdcp_msg_in.payload.data[1];
+    if (rdcp_msg_in.header.rdcp_payload_length >= 2)
+      refnr = rdcp_msg_in.payload.data[0] + 256 * rdcp_msg_in.payload.data[1];
   }
 
   snprintf(info, FATLEN, "RDCPCSV: %04X,%" PRId64 ",%" PRId64 ",%" PRId64 ",%" PRId64 ",%d,%04X,%d,%04X,%04X,%04X,%04X,%02X,%d,%02X,%02X,%02X,%04X,%d,%3.3f,%d,%d",
@@ -2777,7 +2779,7 @@ void rdcp_blockdevice_lock(uint16_t duration)
 
   locke.duration = duration;
   locke.time_added = my_millis();
-  locke.absexp = tdeck_get_time() ? tdeck_get_time() + SECONDS_TO_MILLISECONDS*60*duration : 0;
+  locke.absexp = tdeck_get_time() ? tdeck_get_time() + 60*duration : 0;
 
   if (hasStorage)
   {

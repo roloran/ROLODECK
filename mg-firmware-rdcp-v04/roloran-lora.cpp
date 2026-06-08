@@ -282,7 +282,7 @@ char current_rdcp_msg_base64[FATLEN];           // Base64-encoded version of cur
 char *get_current_rdcp_msg_base64(void) { return current_rdcp_msg_base64; }
 void set_current_rdcp_msg_base64(char *m64)
 {
-  for (int i=0; i<strlen(m64)+1; i++) current_rdcp_msg_base64[i] = m64[i];
+  snprintf(current_rdcp_msg_base64, FATLEN, "%s", m64);
   return;
 }
 
@@ -428,7 +428,7 @@ void OnRxDone(uint8_t *payload, uint16_t size, int16_t rssi, int8_t snr)
 
   has_received_message = true;
 
-  receive_buffer_length = size;
+  receive_buffer_length = size_to_copy;
   receive_rssi = rssi;
   receive_snr = snr;
 
