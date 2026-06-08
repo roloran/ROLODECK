@@ -1505,11 +1505,6 @@ bool rdcp_tx_interface(String b64rdcpmsg, int64_t time=TX_WHEN_CF, uint8_t chann
   b64rdcpmsg.toCharArray(buffer, BUFFER_SIZE);
   int b64msg_len = strlen(buffer);
   int decoded_length = Base64ren.decodedLength(buffer, b64msg_len);
-  char decoded_string[decoded_length + 1];
-  Base64ren.decode(decoded_string, buffer, b64msg_len);
-
-  uint8_t outgoing_message[DATABUFLEN];
-	for (int i=0; i < decoded_length; i++) outgoing_message[i] = decoded_string[i];
 
   if (decoded_length < RDCP_HEADER_SIZE)
   {
@@ -1522,6 +1517,12 @@ bool rdcp_tx_interface(String b64rdcpmsg, int64_t time=TX_WHEN_CF, uint8_t chann
     serial_writeln("ERROR: Message too long to be an RDCP Message, refusing to schedule.");
     return false;
   }
+
+  char decoded_string[decoded_length + 1];
+  Base64ren.decode(decoded_string, buffer, b64msg_len);
+
+  uint8_t outgoing_message[DATABUFLEN];
+	for (int i=0; i < decoded_length; i++) outgoing_message[i] = decoded_string[i];
 
   if (time == TX_WHEN_CF)
   {
@@ -2354,7 +2355,7 @@ void rdcp_mg_process_incoming_private_oa(bool is_duplicate)
   iv[7] = rdcp_msg_in.header.rdcp_payload_length;
   for (int i=0; i<additional_data_size; i++) additional_data[i] = iv[i];
 
-  if (rdcp_msg_in.header.rdcp_payload_length < AESTAGSIZE) return;
+  if (rdcp_msg_in.header.rdcp_payload_length < AESTAGSIZE + 6) return; // must include subheader and AES Tag at least
 
   for (int i=0; i<rdcp_msg_in.header.rdcp_payload_length - AESTAGSIZE; i++) ciphertext[i] = rdcp_msg_in.payload.data[i];
   for (int i=0; i<16; i++) gcmauthtag[i] = rdcp_msg_in.payload.data[rdcp_msg_in.header.rdcp_payload_length - AESTAGSIZE + i];
@@ -2374,8 +2375,8 @@ void rdcp_mg_process_incoming_private_oa(bool is_duplicate)
 
   if (subtype != RDCP_MSGTYPE_OA_SUBTYPE_UPDATE)
   {
-    for (int i=0; i<rdcp_msg_in.header.rdcp_payload_length - RDCP_HEADER_SIZE - 6; i++) uuContent[i] = plaintext[i+6];
-    uuContent[rdcp_msg_in.header.rdcp_payload_length - RDCP_HEADER_SIZE - 6] = 0;
+    for (int i=0; i<rdcp_msg_in.header.rdcp_payload_length - AESTAGSIZE - 6; i++) uuContent[i] = plaintext[i+6];
+    uuContent[rdcp_msg_in.header.rdcp_payload_length - AESTAGSIZE - 6] = 0;
 
     char info[FATLEN];
     int msg_len = rdcp_msg_in.header.rdcp_payload_length - AESTAGSIZE - 6; // without GCM Tag and OA Subheader
@@ -2537,6 +2538,11 @@ void rdcp_mg_process_signature(void)
   if (rdcp_msg_in.header.rdcp_payload_length < (RDCP_SIGNATURE_LENGTH + 2))
   {
     serial_writeln("WARNING: RDCP signature message too short to be valid");
+    return;
+  }
+  if (rdcp_msg_in.header.rdcp_payload_length > (RDCP_SIGNATURE_LENGTH + 2))
+  {
+    serial_writeln("WARNING: RDCP signature message too long to be valid");
     return;
   }
   uint16_t refnr = rdcp_msg_in.payload.data[0] + 256 * rdcp_msg_in.payload.data[1];
