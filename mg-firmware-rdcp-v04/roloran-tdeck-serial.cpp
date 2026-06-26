@@ -497,12 +497,12 @@ void serial_process_command(String s, String processing_mode, bool persist_selec
     else if (s_uppercase.startsWith("TX "))
     {
       String p1 = s.substring(3);
-      rdcp_tx_interface(p1, TX_WHEN_CF, CHANNEL868);
+      rdcp_tx_interface(p1, TX_WHEN_CF, CHANNEL868MG);
     }
     else if (s_uppercase.startsWith("TXNOW "))
     {
       String p1 = s.substring(6);
-      rdcp_tx_interface(p1, TX_IMMEDIATELY, CHANNEL868);
+      rdcp_tx_interface(p1, TX_IMMEDIATELY, CHANNEL868MG);
     }
     else if (s_uppercase.startsWith("TXSCHED "))
     {
@@ -516,7 +516,7 @@ void serial_process_command(String s, String processing_mode, bool persist_selec
       p1.toCharArray(buffer, MINIBUFLEN);
       uint64_t delay = strtol(buffer, NULL, 10);
 
-      rdcp_tx_interface(p2, delay, CHANNEL868);
+      rdcp_tx_interface(p2, delay, CHANNEL868MG);
     }
     else if (s_uppercase.startsWith("BASECFG"))
     {
