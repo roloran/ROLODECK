@@ -1727,7 +1727,7 @@ bool rdcp_callback_cad(bool cad_busy)
 
   if ((retry >= 0) && (retry <= 4))
   {
-    lora_radio_startcad();
+    lora_radio_startcad(txq.entries[tx_ongoing].tx_channel);
   }
   else if (retry == 5)
   {
@@ -1750,7 +1750,7 @@ bool rdcp_callback_cad(bool cad_busy)
   }
   else if ((retry >= 6) && (retry <= 9))
   {
-    lora_radio_startcad();
+    lora_radio_startcad(txq.entries[tx_ongoing].tx_channel);
   }
   else if ((retry >= 10) && (retry <= 14))
   {
