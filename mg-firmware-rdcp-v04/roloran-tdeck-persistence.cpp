@@ -239,7 +239,7 @@ bool persistence_checkset_nonce(char *name, uint16_t nonce)
   bool is_valid = false;
 
   char filename[DATABUFLEN];
-  snprintf(filename, DATABUFLEN, "%s.nce", name);
+  snprintf(filename, DATABUFLEN, "/%s.nce", name);
 
   File f = LittleFS.open(filename, FILE_READ);
   if (!f)
@@ -273,7 +273,9 @@ bool persistence_checkset_nonce(char *name, uint16_t nonce)
     f = LittleFS.open(filename, FILE_WRITE);
     if (!f)
     {
-      serial_writeln("ERROR: Cannot persist nonce");
+      char infomsg[INFOLEN];
+      snprintf(infomsg, INFOLEN, "ERROR: Cannot persist nonce, filename: %s", filename);
+      serial_writeln(infomsg);
       is_valid = false; // cannot persist nonce, don't trust it
     }
 

@@ -47,6 +47,8 @@ volatile bool        new_cad_result_busy = false;
 volatile bool        has_txed = false;
 volatile int64_t     has_txed_timestamp = NO_TIMESTAMP;
 
+extern int64_t       last_screen_switch_timestamp;
+
 /**
  * @return int64_t Current monotonic clock time in milliseconds. 
 */
@@ -300,6 +302,7 @@ void radio_loop()
     rdcp_callback_txfin();
     has_txed = true;
     has_txed_timestamp = my_millis();
+    set_gui_needs_screen_refresh(true);
   }
 
   if (has_received_message == true)
@@ -318,6 +321,7 @@ void radio_loop()
     Base64ren.encode(encodedString, (char *) receive_buffer, receive_buffer_length);
     serial_writeln("RX " + String(encodedString));
     snprintf(current_rdcp_msg_base64, FATLEN, "%s\0", encodedString);
+    set_gui_needs_screen_refresh(true);
   }
 
   if (has_timeout_tx == true)
@@ -349,6 +353,7 @@ void radio_loop()
     delay(1);
     Radio.Standby();
     rdcp_callback_cad(new_cad_result_busy);
+    set_gui_needs_screen_refresh(true);
   }
 
 	return;

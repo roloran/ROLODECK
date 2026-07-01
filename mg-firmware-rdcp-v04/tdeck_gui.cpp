@@ -12,6 +12,7 @@
 uint8_t my_previous_screen = SCREEN_SPLASH;
 uint8_t my_current_screen = SCREEN_SPLASH;
 uint8_t my_previous_nonsplash_screen = SCREEN_EULA;
+int64_t last_screen_switch_timestamp = NO_TIMESTAMP;
 
 uint8_t gui_get_current_screen(void) { return my_current_screen; }
 
@@ -41,6 +42,7 @@ void gui_transition_to_screen(uint8_t screenId)
   char uiinfo[INFOLEN];
   snprintf(uiinfo, INFOLEN, "INFO: Switching to UI screen %d", my_current_screen);
   serial_writeln(uiinfo);
+  last_screen_switch_timestamp = my_millis();
 
   switch(my_current_screen)
   {

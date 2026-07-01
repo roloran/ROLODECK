@@ -617,6 +617,8 @@ void tdeck_loop()
   cpu_high();
   gfx->drawPixel(0, 0, 7);
   gfx->drawPixel(screenWidth-1, 0, 7);
+  gfx->drawPixel(0, screenHeight-1, 7);
+  gfx->drawPixel(screenWidth-1, screenHeight-1, 7);
 
   lv_timer_handler();
   delay(1);

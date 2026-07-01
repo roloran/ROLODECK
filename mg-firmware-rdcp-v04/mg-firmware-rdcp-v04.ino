@@ -23,7 +23,7 @@
        TODO (Schnorr signature library)
 
     Install libraries via Arduino IDE:
-    - GFX Library for Arduino by Moon On Our Nation, v1.6.1 (previously v1.5.6)
+    - GFX Library for Arduino by Moon On Our Nation, v1.6.0 (previously v1.5.6)
     - Crypto by Rhys Weatherley, v0.4.0
 
     Additional libraries included with this project, _not_ to be installed manually:
