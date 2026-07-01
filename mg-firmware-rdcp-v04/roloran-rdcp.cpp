@@ -2235,6 +2235,9 @@ void rdcp_send_cire(uint8_t subtype, uint16_t refnr, char *text)
   for (int i=0; i<rm.header.rdcp_payload_length; i++) data[i + RDCP_HEADER_SIZE] = rm.payload.data[i];
   rdcp_txqueue_add(CHANNEL868MG, data, RDCP_HEADER_SIZE + rm.header.rdcp_payload_length, IMPORTANT, NOTFORCEDTX, TX_CALLBACK_CIRE, TX_WHEN_CF);
 
+  /* Clear the duplicate table when we send a CIRE so we don't ignore DA and HQ ACKs in case we missed a Reset of Infrastructure */
+  rdcp_reset_duplicate_message_table();
+
   return;
 }
 
