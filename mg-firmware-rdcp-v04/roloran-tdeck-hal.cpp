@@ -22,6 +22,15 @@
 #include "gps.h"
 
 #define KEY_SCAN_MS_INTERVAL 200
+#define ROLODECK_I2C_FREQ 100000UL
+#define ROLODECK_I2C_TIMEOUT_MS 100
+#define ROLODECK_I2C_BUS_CLEAR_PULSES 16
+#define ROLODECK_PERIPHERAL_POWER_CYCLE_OFF_MS 500
+#define ROLODECK_PERIPHERAL_POWER_CYCLE_ON_MS 1200
+#define ROLODECK_KEYBOARD_PROBE_ATTEMPTS 6
+#define ROLODECK_KEYBOARD_RECOVERY_PASSES 3
+#define ROLODECK_KEYBOARD_PROBE_DELAY_MS 250
+#define ROLODECK_KEYBOARD_MODE_KEY_CMD 0x04
 
 bool rolodeck_plus_oneburst_cire = false;
 
@@ -101,6 +110,70 @@ static void tdeck_display_wake(void)
 
   digitalWrite(TDECK_TFT_BACKLIGHT, HIGH);
   tdeck_display_unlock();
+}
+
+static void tdeck_prepare_spi_chip_selects(void)
+{
+  pinMode(TDECK_SDCARD_CS, OUTPUT);
+  digitalWrite(TDECK_SDCARD_CS, HIGH);
+  pinMode(TDECK_RADIO_CS, OUTPUT);
+  digitalWrite(TDECK_RADIO_CS, HIGH);
+  pinMode(TDECK_TFT_CS, OUTPUT);
+  digitalWrite(TDECK_TFT_CS, HIGH);
+}
+
+static void tdeck_startup_peripheral_power_cycle(void)
+{
+  tdeck_prepare_spi_chip_selects();
+  pinMode(TDECK_PERI_POWERON, OUTPUT);
+  digitalWrite(TDECK_PERI_POWERON, LOW);
+  delay(ROLODECK_PERIPHERAL_POWER_CYCLE_OFF_MS);
+  digitalWrite(TDECK_PERI_POWERON, HIGH);
+  delay(ROLODECK_PERIPHERAL_POWER_CYCLE_ON_MS);
+}
+
+static void tdeck_i2c_release_lines(void)
+{
+  pinMode(TDECK_I2C_SDA, INPUT_PULLUP);
+  pinMode(TDECK_I2C_SCL, INPUT_PULLUP);
+  delay(2);
+}
+
+static void tdeck_i2c_bus_clear(void)
+{
+  Wire.end();
+  tdeck_i2c_release_lines();
+
+  pinMode(TDECK_I2C_SCL, OUTPUT_OPEN_DRAIN);
+  digitalWrite(TDECK_I2C_SCL, HIGH);
+  pinMode(TDECK_I2C_SDA, INPUT_PULLUP);
+
+  for (uint8_t i = 0; i < ROLODECK_I2C_BUS_CLEAR_PULSES && digitalRead(TDECK_I2C_SDA) == LOW; i++)
+  {
+    digitalWrite(TDECK_I2C_SCL, LOW);
+    delayMicroseconds(10);
+    digitalWrite(TDECK_I2C_SCL, HIGH);
+    delayMicroseconds(10);
+  }
+
+  pinMode(TDECK_I2C_SDA, OUTPUT_OPEN_DRAIN);
+  digitalWrite(TDECK_I2C_SDA, LOW);
+  delayMicroseconds(10);
+  digitalWrite(TDECK_I2C_SCL, HIGH);
+  delayMicroseconds(10);
+  digitalWrite(TDECK_I2C_SDA, HIGH);
+  delayMicroseconds(10);
+  tdeck_i2c_release_lines();
+}
+
+static bool tdeck_i2c_begin(void)
+{
+  tdeck_i2c_bus_clear();
+  bool started = Wire.begin(TDECK_I2C_SDA, TDECK_I2C_SCL, ROLODECK_I2C_FREQ);
+  Wire.setTimeOut(ROLODECK_I2C_TIMEOUT_MS);
+  Wire.setClock(ROLODECK_I2C_FREQ);
+  delay(10);
+  return started;
 }
 
 void set_gui_needs_screen_refresh(bool yesno)
@@ -247,7 +320,7 @@ void touch_init(int16_t w, int16_t h, uint8_t r)
       break;
     }
   }
-  Wire.begin(TOUCH_SDA, TOUCH_SCL);
+  if (!tdeck_i2c_begin()) Serial.println(SERIAL_PREFIX "ERROR: I2C bus initialization failed!");
   delay(10);
   touch.init();
   delay(10);
@@ -395,6 +468,59 @@ void IRAM_ATTR ISR_click()
 #endif
 }
 
+static bool tdeck_i2c_probe(uint8_t address)
+{
+  Wire.beginTransmission(address);
+  return Wire.endTransmission() == 0;
+}
+
+static bool tdeck_keyboard_read_byte(uint8_t *key)
+{
+  if (!tdeck_i2c_probe((uint8_t)TDECK_KEYBOARD_ADDR)) return false;
+
+  if (Wire.requestFrom((uint8_t)TDECK_KEYBOARD_ADDR, (uint8_t)1) != 1) return false;
+
+  int value = Wire.read();
+  if (value < 0) return false;
+
+  *key = (uint8_t)value;
+  return true;
+}
+
+static bool tdeck_keyboard_set_key_mode(void)
+{
+  Wire.beginTransmission((uint8_t)TDECK_KEYBOARD_ADDR);
+  Wire.write((uint8_t)ROLODECK_KEYBOARD_MODE_KEY_CMD);
+  return Wire.endTransmission() == 0;
+}
+
+static bool tdeck_keyboard_init(void)
+{
+  pinMode(TDECK_KEYBOARD_INT, INPUT_PULLUP);
+
+  for (uint8_t pass = 0; pass < ROLODECK_KEYBOARD_RECOVERY_PASSES; pass++)
+  {
+    if (pass > 0) Serial.println(SERIAL_PREFIX "WARNING: Keyboard probe failed, recovering I2C bus and retrying...");
+    if (!tdeck_i2c_begin()) Serial.println(SERIAL_PREFIX "WARNING: I2C bus recovery failed while probing keyboard.");
+
+    for (uint8_t attempt = 0; attempt < ROLODECK_KEYBOARD_PROBE_ATTEMPTS; attempt++)
+    {
+      uint8_t key = 0;
+      if (tdeck_keyboard_read_byte(&key))
+      {
+        if (!tdeck_keyboard_set_key_mode()) Serial.println(SERIAL_PREFIX "WARNING: Keyboard responded but key-mode command failed.");
+        keyboard_interrupted = false;
+        next_key_scan_ms = my_millis() + KEY_SCAN_MS_INTERVAL;
+        attachInterrupt(TDECK_KEYBOARD_INT, ISR_key, FALLING);
+        return true;
+      }
+      delay(ROLODECK_KEYBOARD_PROBE_DELAY_MS);
+    }
+  }
+
+  return false;
+}
+
 /* -------------------------------------------------------------------------- */
 
 void my_keyboard_read(lv_indev_drv_t *drv, lv_indev_data_t *data)
@@ -442,12 +568,12 @@ void my_keyboard_read(lv_indev_drv_t *drv, lv_indev_data_t *data)
       }
       else
       {
-        Wire.requestFrom(TDECK_KEYBOARD_ADDR, 1);
-        while (Wire.available() > 0)
-        {
-           key = Wire.read();
-        }
+        uint8_t keyboard_key = 0;
+        if (tdeck_keyboard_read_byte(&keyboard_key)) key = keyboard_key;
       }
+
+      next_key_scan_ms = my_millis() + KEY_SCAN_MS_INTERVAL;
+      keyboard_interrupted = false;
 
       if (key > 0)
       {
@@ -483,8 +609,6 @@ void my_keyboard_read(lv_indev_drv_t *drv, lv_indev_data_t *data)
         if (tdeck_display_is_on && tdeck_screensaver_off_since() > 2000) data->key = key;
         data->state = LV_INDEV_STATE_PR;
 
-        next_key_scan_ms = my_millis() + KEY_SCAN_MS_INTERVAL;
-        keyboard_interrupted = false;
         timestamp_last_activity = my_millis();
 
         last_key = key;
@@ -505,6 +629,7 @@ void tdeck_setup(void)
   xSemaphoreGive(highlander);
 
   /* ------------------------------------------------------------ */
+  tdeck_startup_peripheral_power_cycle();
   GFX_EXTRA_PRE_INIT();
   
   SPI.end();
@@ -526,23 +651,10 @@ void tdeck_setup(void)
   gfx->invertDisplay(true);
 
   /* ------------------------------------------------------------ */
-  pinMode(TDECK_KEYBOARD_INT, INPUT_PULLUP);
-  attachInterrupt(TDECK_KEYBOARD_INT, ISR_key, FALLING);
-
-  uint8_t kbtry = 0;
-  while (true)
+  if (!tdeck_keyboard_init())
   {
-    delay(250);
-    Wire.requestFrom(TDECK_KEYBOARD_ADDR, 1);
-    delay(250);
-    if (Wire.read() != -1) break;
-    kbtry++;
-    if (kbtry > 5)
-    {
-      Serial.println(SERIAL_PREFIX "ERROR: Keyboard not working, please turn device off and on again!");
-      initialization_failed = true;
-      break;
-    }
+    Serial.println(SERIAL_PREFIX "ERROR: Keyboard not working, please turn device off and on again!");
+    initialization_failed = true;
   }
 
   /* ------------------------------------------------------------ */
