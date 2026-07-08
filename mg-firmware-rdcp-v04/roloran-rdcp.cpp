@@ -15,6 +15,7 @@
 #include <Hash.h>
 #include <Crypto.h>
 #include <LittleFS.h>
+#include "gps.h"
 
 #define BUFFER_SIZE 512
 #define FILENAME_CIRE "/cire"
@@ -60,6 +61,8 @@ uint16_t cire_guitext_num = 1;
 uint16_t cire_current_ep = RDCP_NO_ADDRESS;
 
 extern bool gui_cire_buttons_currently_disabled;
+extern char gps_position[128];
+extern char gps_timestamp[128];
 
 int64_t rdcp_get_channel_free_estimation(uint8_t channel)
 {
@@ -2173,9 +2176,19 @@ void rdcp_send_cire(uint8_t subtype, uint16_t refnr, char *text)
 
   /* Convert the text message to its Unishox2 representation */
   char buf[INFOLEN];
-  unsigned int len = strlen(text);
+  char extended_text[INFOLEN];
+
+  snprintf(extended_text, INFOLEN, "%s", text);
+
+#ifdef ROLODECK_USE_GPS
+  char extended_info[INFOLEN];
+  snprintf(extended_info, INFOLEN, "INFO: CIRE content is %s", extended_text);
+  serial_writeln(extended_info);
+#endif
+
+  unsigned int len = strlen(extended_text);
   memset(buf, 0, sizeof(buf));
-  int c_total = unishox2_compress_simple(text, len, buf);
+  int c_total = unishox2_compress_simple(extended_text, len, buf);
 
   if (165 < c_total)
   {
@@ -2237,6 +2250,128 @@ void rdcp_send_cire(uint8_t subtype, uint16_t refnr, char *text)
 
   /* Clear the duplicate table when we send a CIRE so we don't ignore DA and HQ ACKs in case we missed a Reset of Infrastructure */
   rdcp_reset_duplicate_message_table();
+
+  return;
+}
+
+void rdcp_send_cire_gps_oneburst(void)
+{
+  struct rdcp_message rm;
+  uint8_t data[DATABUFLEN];
+
+  uint8_t subtype = RDCP_MSGTYPE_CIRE_SUBTYPE_REQUEST;
+  uint16_t refnr = get_next_cire_nonce(getMyRDCPAddress());
+
+  char extended_text[INFOLEN];
+  snprintf(extended_text, INFOLEN, "!#One-burst quick CIRE#0");
+
+#ifdef ROLODECK_USE_GPS
+  snprintf(extended_text, INFOLEN, "!#One-burst quick CIRE /// %s#0", gps_position);
+  char extended_info[INFOLEN];
+  snprintf(extended_info, INFOLEN, "INFO: Quick-CIRE content is %s", extended_text);
+  serial_writeln(extended_info);
+#endif
+
+  /* Save the information for later re-try events. */
+  cire_current_subtype = subtype;
+  cire_current_refnr = refnr;
+  snprintf(cire_current_text, DATABUFLEN, "%s", extended_text);
+
+  /* Fill the RDCP Header with already known information */
+  uint16_t me = getMyRDCPAddress();
+  rm.header.origin = me;
+  rm.header.sender = me;
+  rm.header.destination  = RDCP_HQ_MULTICAST_ADDRESS;
+  rm.header.message_type = RDCP_MSGTYPE_CITIZEN_REPORT;
+  rm.header.counter = 4;
+  rm.header.sequence_number = get_next_rdcp_sequence_number(me);
+  cire_current_seqnr = rm.header.sequence_number;
+
+  uint16_t primary_ep = getSuggestedRelay(cire_retry); //getEntryPoint(cire_retry);
+  cire_current_ep = primary_ep;
+  rm.header.relay1 = (uint8_t) ((primary_ep & 0x000F) * 16) + (uint8_t) 0x0;
+  rm.header.relay2 = RDCP_HEADER_RELAY_MAGIC_NONE;
+  rm.header.relay3 = RDCP_HEADER_RELAY_MAGIC_NONE;
+
+  /* Prepare the MT-specific header at the beginning of the RDCP Payload */
+  rm.payload.data[0] = subtype;
+  rm.payload.data[1] = refnr % 256;
+  rm.payload.data[2] = refnr / 256;
+
+  /* Convert the text message to its Unishox2 representation */
+  char buf[INFOLEN];
+
+  unsigned int len = strlen(extended_text);
+  memset(buf, 0, sizeof(buf));
+  int c_total = unishox2_compress_simple(extended_text, len, buf);
+
+  if (165 < c_total)
+  {
+    serial_writeln("ERROR: Unishox data too long, cannot send full CIRE");
+    c_total = 165;
+  }
+
+  /* Fill the RDCP Payload with the Unishox2 content */
+  for (int i=0; i < c_total; i++)
+  {
+    rm.payload.data[i+3] = buf[i];
+  }
+
+  /* RDCP Payload length is subheader length (3) + Unishox2 length + AES-GMC AuthTag size (16) */
+  rm.header.rdcp_payload_length = 3 + c_total + AESTAGSIZE;
+
+  /* AES-GCM encrypt the RDCP Payload */
+  uint8_t ciphertext[DATABUFLEN];
+  uint8_t iv[12];
+  uint8_t gcmauthtag[AESTAGSIZE];
+  uint8_t additional_data[8];
+  uint8_t additional_data_size = 8;
+
+  memset(iv, 0, sizeof(iv));
+  iv[0] = rm.header.origin % 256;
+  iv[1] = rm.header.origin / 256;
+  iv[2] = rm.header.sequence_number % 256;
+  iv[3] = rm.header.sequence_number / 256;
+  iv[4] = rm.header.destination % 256;
+  iv[5] = rm.header.destination / 256;
+  iv[6] = rm.header.message_type;
+  iv[7] = rm.header.rdcp_payload_length;
+  for (int i=0; i<additional_data_size; i++) additional_data[i] = iv[i];
+
+  encrypt_aes256gcm((uint8_t *) &rm.payload.data, rm.header.rdcp_payload_length - AESTAGSIZE,
+                    additional_data, additional_data_size,
+                    getHQsharedSecret(), 32,
+                    iv, 12,
+                    ciphertext, gcmauthtag, AESTAGSIZE);
+
+  /* Copy ciphertext and GCM AuthTag into the RDCP Payload */
+  for (int i=0; i<rm.header.rdcp_payload_length-AESTAGSIZE; i++) rm.payload.data[i] = ciphertext[i];
+  for (int i=0; i<16; i++) rm.payload.data[rm.header.rdcp_payload_length-AESTAGSIZE+i] = gcmauthtag[i];
+
+  /* Finalize the RDCP Header by calculating the checksum */
+  uint8_t data_for_crc[DATABUFLEN];
+  memcpy(&data_for_crc, &rm.header, RDCP_HEADER_SIZE - CRC_SIZE);
+  for (int i=0; i < rm.header.rdcp_payload_length; i++)
+  {
+    data_for_crc[i + RDCP_HEADER_SIZE - CRC_SIZE] = rm.payload.data[i];
+  }
+  uint16_t actual_crc = crc16(data_for_crc, RDCP_HEADER_SIZE - CRC_SIZE + rm.header.rdcp_payload_length);
+  rm.header.checksum = actual_crc;
+
+  /* Schedule the crafted message for sending */
+  memcpy(&data, &rm.header, RDCP_HEADER_SIZE);
+  for (int i=0; i<rm.header.rdcp_payload_length; i++) data[i + RDCP_HEADER_SIZE] = rm.payload.data[i];
+  rdcp_txqueue_add(CHANNEL868MG, data, RDCP_HEADER_SIZE + rm.header.rdcp_payload_length, IMPORTANT, NOTFORCEDTX, TX_CALLBACK_NONE, TX_WHEN_CF);
+
+  /* Clear the duplicate table when we send a CIRE so we don't ignore DA and HQ ACKs in case we missed a Reset of Infrastructure */
+  rdcp_reset_duplicate_message_table();
+
+  char gui_text[FATLEN];
+#ifdef ROLODECK_USE_GPS
+  snprintf(gui_text, FATLEN, "%s\nQuick-CIRE %s mit Referenznummer %04X-%04X gesendet.", 
+    gps_timestamp, gps_position, getMyRDCPAddress(), refnr);
+  mb_add_local_message(gui_text, refnr, 0, 60002, true);
+#endif
 
   return;
 }

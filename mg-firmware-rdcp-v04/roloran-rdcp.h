@@ -637,5 +637,7 @@ void rdcpcsv_logfile_set_status(bool enabled);
 void rdcpcsv_logfile_delete(void);
 void rdcpcsv_logfile_dump(void);
 
+void rdcp_send_cire_gps_oneburst(void);
+
 #endif
 /* EOF */

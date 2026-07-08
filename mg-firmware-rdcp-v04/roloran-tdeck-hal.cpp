@@ -19,8 +19,11 @@
 #include "ui.h"
 #include "tdeck_gui.h"
 #include "roloran-lora.h"
+#include "gps.h"
 
 #define KEY_SCAN_MS_INTERVAL 200
+
+bool rolodeck_plus_oneburst_cire = false;
 
 /* -------------------------------------------------------------------------- */
 
@@ -348,6 +351,9 @@ void IRAM_ATTR ISR_click()
   ++trackball_click_count;
   timestamp_last_activity = my_millis();
   gui_need_screen_refresh = true;
+#ifdef ROLODECK_GPS_QUICKCIRE
+  rolodeck_plus_oneburst_cire = true;
+#endif
 }
 
 /* -------------------------------------------------------------------------- */

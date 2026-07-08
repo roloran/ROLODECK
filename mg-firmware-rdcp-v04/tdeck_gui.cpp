@@ -8,6 +8,7 @@
 #include "roloran-tdeck-hal.h"
 #include "roloran-board.h"
 #include "settings-scenario.h"
+#include "gps.h"
 
 uint8_t my_previous_screen = SCREEN_SPLASH;
 uint8_t my_current_screen = SCREEN_SPLASH;
@@ -15,6 +16,7 @@ uint8_t my_previous_nonsplash_screen = SCREEN_EULA;
 int64_t last_screen_switch_timestamp = NO_TIMESTAMP;
 
 uint8_t gui_get_current_screen(void) { return my_current_screen; }
+extern char gps_position[128];
 
 bool infrastructure_in_crisis = true;
 void set_infrastructure_in_crisis(bool value) { infrastructure_in_crisis = value; return; }
@@ -179,6 +181,10 @@ void gui_callback_cire(lv_event_t *e)
       char ciretext[DATABUFLEN];
       snprintf(ciretext, DATABUFLEN, "%s#%s#%d", c_who, c_what, category);
 
+#ifdef ROLODECK_USE_GPS
+      snprintf(ciretext, DATABUFLEN, "%s#%s /// %s#%d", c_who, c_what, gps_position, category);
+#endif
+
       char info[DATABUFLEN];
       snprintf(info, DATABUFLEN, "INFO: Preparing CIRE: %s", ciretext);
       serial_writeln(info);
@@ -226,9 +232,15 @@ void gui_callback_resp_submit(lv_event_t *e)
 
     if (enoughData)
     {
-      char ciretext[DATABUFLEN];
-      s_freetext.toCharArray(ciretext, DATABUFLEN);
+      char ciretext[DATABUFLEN], ciretext_short[DATABUFLEN];
+      s_freetext.toCharArray(ciretext_short, DATABUFLEN);
 
+#ifdef ROLODECK_USE_GPS
+      snprintf(ciretext, DATABUFLEN, "%s /// %s", ciretext_short, gps_position);
+#else
+      snprintf(ciretext, DATABUFLEN, "%s", ciretext_short);
+#endif
+      
       char info[DATABUFLEN];
       snprintf(info, DATABUFLEN, "INFO: Preparing CIRE: %s", ciretext);
       serial_writeln(info);
@@ -519,6 +531,10 @@ void gui_callback_emer_send(lv_event_t *e)
 
     char ciretext[DATABUFLEN];
     snprintf(ciretext, DATABUFLEN, "%s#%s#%s#%c", c_who, c_where, c_what, emer2state);
+
+#ifdef ROLODECK_USE_GPS
+      snprintf(ciretext, DATABUFLEN, "%s#%s#%s /// %s#%c", c_who, c_where, c_what, gps_position, emer2state);
+#endif
 
     char info[DATABUFLEN];
     snprintf(info, DATABUFLEN, "INFO: Preparing CIRE: %s", ciretext);

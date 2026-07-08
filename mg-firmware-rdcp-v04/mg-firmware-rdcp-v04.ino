@@ -25,6 +25,7 @@
     Install libraries via Arduino IDE:
     - GFX Library for Arduino by Moon On Our Nation, v1.6.0 (previously v1.5.6)
     - Crypto by Rhys Weatherley, v0.4.0
+    - TinyGPSPlus@1.0.3
 
     Additional libraries included with this project, _not_ to be installed manually:
     - Base64 by Arturo Guadalupi, https://github.com/Xander-Electronics/Base64, v1.0.0,
@@ -45,6 +46,7 @@
 #include "ui.h"                         // GUI as exported from SquareLine Studio
 #include "tdeck_gui.h"                  // GUI helper functions
 #include "roloran-board.h"              // Message Board functions
+#include "gps.h"
 
 #define BUFSIZE 512
 
@@ -58,6 +60,7 @@ int64_t  lora_packet_timestamp = 0;
 bool provisioned = false; // has the device already been provisioned?
 extern bool has_txed;
 extern bool hq_mode;
+extern bool rolodeck_plus_oneburst_cire;
 
 int64_t minutetimer = -1; // track milliseconds so we execute some tasks only about once per minute
 int32_t old_free_heap = ESP.getFreeHeap();
@@ -89,6 +92,10 @@ void setup(void)
     serial_writeln("WARNING: DEVICE NEEDS PROVISIONING. PLEASE START BASECFG PROCEDURE!");
   }
 
+#ifdef ROLODECK_USE_GPS
+  gps_setup();
+#endif
+
   gui_callback_setup();         // Set up the GUI callbacks missing in SquareLine Studio export
 
   return;
@@ -100,6 +107,9 @@ void setup(void)
 void loop(void)
 {
   static bool first_loop = true;
+#ifdef ROLODECK_USE_GPS
+  gps_loop();
+#endif
 
   if (first_loop)
   { // Only perform the following actions once.
@@ -208,6 +218,14 @@ void loop(void)
       }
     }
   }
+
+#ifdef ROLODECK_GPS_QUICKCIRE
+  if (rolodeck_plus_oneburst_cire)
+  {
+    rolodeck_plus_oneburst_cire = false;
+    rdcp_send_cire_gps_oneburst();
+  }
+#endif
 
   return;
 }
