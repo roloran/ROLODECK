@@ -41,6 +41,9 @@ bool rolodeck_plus_oneburst_cire = false;
     delay(500);                             \
   }
 #define GFX_BL TDECK_TFT_BACKLIGHT
+#define ROLODECK_ST7789_NORON   0x13
+#define ROLODECK_ST7789_DISPOFF 0x28
+#define ROLODECK_ST7789_DISPON  0x29
 Arduino_DataBus *bus = new Arduino_ESP32SPI(TDECK_TFT_DC, TDECK_TFT_CS, TDECK_SPI_SCK, TDECK_SPI_MOSI, TDECK_SPI_MISO); // breaks sx , 1, false);
 Arduino_GFX *gfx     = new Arduino_ST7789(bus, GFX_NOT_DEFINED /* RST */, 1 /* rotation */, false /* IPS */);
 
@@ -58,6 +61,47 @@ SemaphoreHandle_t highlander = NULL;
 StaticSemaphore_t highlanderBuffer;
 
 bool is_screensaver_on(void) { return tdeck_screensaver_is_on; }
+
+static void tdeck_display_lock(void)
+{
+  if (highlander) xSemaphoreTake(highlander, portMAX_DELAY);
+  digitalWrite(TDECK_RADIO_CS, HIGH);
+  digitalWrite(TDECK_TFT_CS, HIGH);
+  delay(1);
+}
+
+static void tdeck_display_unlock(void)
+{
+  digitalWrite(TDECK_TFT_CS, HIGH);
+  delay(1);
+  if (highlander) xSemaphoreGive(highlander);
+}
+
+static void tdeck_display_sleep(void)
+{
+  tdeck_display_lock();
+  digitalWrite(TDECK_TFT_BACKLIGHT, LOW);
+  bus->sendCommand(ROLODECK_ST7789_DISPOFF);
+  delay(20);
+  gfx->displayOff();
+  tdeck_display_unlock();
+}
+
+static void tdeck_display_wake(void)
+{
+  tdeck_display_lock();
+
+  gfx->displayOn();
+  bus->sendCommand(ROLODECK_ST7789_NORON);
+  delay(10);
+  bus->sendCommand(ROLODECK_ST7789_DISPON);
+  delay(20);
+  gfx->setRotation(gfx->getRotation());
+  gfx->invertDisplay(true);
+
+  digitalWrite(TDECK_TFT_BACKLIGHT, HIGH);
+  tdeck_display_unlock();
+}
 
 void set_gui_needs_screen_refresh(bool yesno)
 {
@@ -83,8 +127,7 @@ unsigned long tdeck_screensaver_off_since(void)
 void screensaver_on(void)
 {
   if (tdeck_screensaver_is_on) return;
-  digitalWrite(TDECK_TFT_BACKLIGHT, LOW);
-  gfx->displayOff();
+  tdeck_display_sleep();
   tdeck_display_is_on = false;
   tdeck_screensaver_is_on = true;
   return;
@@ -94,17 +137,13 @@ void screensaver_off(void)
 {
   if (tdeck_screensaver_is_on == false) return;
   cpu_high();
-  digitalWrite(TDECK_TFT_BACKLIGHT, HIGH);
-  gfx->displayOn();
+  tdeck_display_wake();
   tdeck_display_is_on = true;
   tdeck_screensaver_is_on = false;
   timestamp_screensaver_off = my_millis();
-  delay(5);
-  digitalWrite(TDECK_TFT_BACKLIGHT, HIGH); /* Turn it on twice because this seems buggy. */
-  gfx->displayOn();
   timestamp_last_activity = my_millis();
-  tdeck_loop();
   set_gui_needs_screen_refresh(true);
+  tdeck_loop();
   gui_handle_PTSD(true);
   return;
 }
