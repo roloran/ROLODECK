@@ -40,6 +40,24 @@ The lv_conf.h file should be placed as indicated below, which is stored in the l
 │ ├── lv_conf.h (insert the template file from lvgl library folder and rename it)
 └── ...
 ```
+
+`lv_conf.h` requires the following adjustments:
+- Enable content (line 15)
+
+```
+#if 1
+```
+- Byte order for RGB colors (line 30)
+```
+#define LV_COLOR_16_SWAP 0
+```
+- Used fonts (line 366 - 368)
+```
+#define LV_FONT_MONTSERRAT_12 1
+#define LV_FONT_MONTSERRAT_14 1
+#define LV_FONT_MONTSERRAT_16 1
+```
+
 Via `Arduino IDE`, the following dependencies can be installed:
 
 - GFX Library for Arduino by Moon On Our Nation, v1.5.6
