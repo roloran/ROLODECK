@@ -284,6 +284,13 @@ void print_rdcp_csv(void)
   serial_writeln(info);
   rdcpcsv_logfile_append(info);
 
+#ifdef ROLODECK_USE_GPS
+  snprintf(info, FATLEN, "RDCPGPS: %04X-%04X,%04X,%s,%s", 
+    rdcp_msg_in.header.origin, rdcp_msg_in.header.sequence_number,
+    rdcp_msg_in.header.sender, gps_position, gps_timestamp);
+  serial_writeln(info);
+#endif
+
   last_csv_timestamp = now;
 
   return;
