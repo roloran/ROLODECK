@@ -187,6 +187,8 @@ void radio_apply_new_configuration(void)
   radio_setup();
 }
 
+extern uint8_t current_channel;
+
 void radio_switch_channel(uint8_t channel)
 {
   digitalWrite(TDECK_TFT_CS, HIGH);
@@ -206,7 +208,10 @@ void radio_switch_channel(uint8_t channel)
   else 
   {
     serial_writeln("WARNING: Invalid LoRa radio channel switch");
+    return;
   }
+
+  current_channel = channel;
 
   uint32_t freq;
   if (channel == CHANNEL868DA) freq = getMyLoRaFrequency() * 1000 * 1000; 
@@ -313,7 +318,8 @@ void radio_loop()
     startReceiveMode(); /* make sure we can receive further LoRa packets */
 
 	  serial_writeln("INFO: LoRa Radio received packet.");
-    snprintf(buf, BUFFER_SIZE-1, "RXMETA %d %d %d %.3f\0", receive_buffer_length, receive_rssi, receive_snr, getMyLoRaFrequency());
+    snprintf(buf, BUFFER_SIZE-1, "RXMETA %d %d %d %.3f\0", receive_buffer_length, receive_rssi, receive_snr, 
+      current_channel == CHANNEL868DA ? getMyLoRaFrequency() : getMyLoRaFrequencyTX());
 	  serial_writeln(String(buf));
 
     int encodedLength = Base64ren.encodedLength(receive_buffer_length);
@@ -378,8 +384,12 @@ void lora_radio_startcad(uint8_t channel)
   delay(1);
   digitalWrite(TDECK_RADIO_CS, LOW);
   delay(1);
+
+  radio_switch_channel(channel); // enforced
+  delay(1);
 	Radio.Standby();
   delay(1);
+
   if (channel == CHANNEL868DA)
   {
 	  //Radio.SetCadParams(LORA_CAD_08_SYMBOL, getMyLoRaSpreadingFactor() + 13, 10, LORA_CAD_ONLY, 0);

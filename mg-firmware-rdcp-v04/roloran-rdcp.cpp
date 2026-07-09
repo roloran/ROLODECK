@@ -1612,6 +1612,7 @@ bool rdcp_send_message_force(void)
                         txq.entries[tx_ongoing].payload[8]);
   rdcp_txqueue_reschedule(1);
 
+  radio_switch_channel(current_channel); // enforced
   return lora_radio_send(txq.entries[tx_ongoing].payload, txq.entries[tx_ongoing].payload_length);
 }
 
