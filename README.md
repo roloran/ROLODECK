@@ -23,62 +23,63 @@ When using the `Arduino IDE` for compilation (note that using `Arduino CLI` is r
 - Flash size 16 MB
 - Partition Scheme 16M Flash (3MB APP)
 
-Several libraries related to T-Deck hardware components are used as provided in [LilyGo's T-Deck repository](https://github.com/Xinyuan-LilyGO/T-Deck), including:
+The following repositories contain all libraries required to run the firmware. While listed forks provide tested versions, including necessary patches (e.g., SX126X for SPI handling) and must be installed manually, some libraries can be installed via `Arduino IDE`. Note that LilyGo's T-Deck repository already bundles relevant libraries in its `lib` folder.
 
-- TouchLib
-- lv_conf.h
-- lvgl (8.4.0)
+| Repository| Fork link | Original link | Recommended Install | Version(s) | Libraries|
+|-|-|-|-|-|-|
+|SchnorrSig | - | [ROLORAN-Original](https://github.com/roloran/SchnorrSig.git) | Git | as provided | SchnorrSig|
+|LilyGo T-Deck | [ROLORAN-Fork](https://github.com/roloran/LilyGO-T-Deck)|[Original](https://github.com/Xinyuan-LilyGO/T-Deck)| Git |as provided| AceButton, Arduino_GFX, es7210, ESP32-audioI2S, lv_conf.h, lvgl (v8.4.0), RadioLib, SensorsLib, TFT_eSPI, TinyGPSPlus, TouchLib
+| Unishox2 | [ROLORAN-Fork](https://github.com/roloran/Unishox_Arduino_lib) | [Original](https://github.com/siara-cc/Unishox_Arduino_lib) | Git | as provided | Unishox2
+| Arduino SX126X | [ROLORAN-Fork](https://github.com/roloran/SX126x-Arduino) | [Original](https://github.com/beegee-tokyo/SX126x-Arduino) | Git | as provided | Arduino SX126X
+GFX Library for Arduino | - | [Original](https://github.com/moononournation/Arduino_GFX) | Arduino | 1.6.0 | GFX Library for Arduino|
+Crypto | - | [Original](https://github.com/rweather/arduinolibs) |Arduino |  0.4.0 | Crypto
+ESP8266Audio | - | [Original](https://github.com/earlephilhower/ESP8266Audio) | Arduino | 2.0.0 | ESP8266Audio
+ESP32_BleSerial | - | [Original](https://github.com/avinabmalla/ESP32_BleSerial) | Arduino | 2.0.1 | ESP32_BleSerial
 
-Copy them to the directory where Arduino IDE installs libraries. We keep a tested fork of LilyGo's repository [here](https://github.com/roloran/LilyGO-T-Deck).
-The lv_conf.h file should be placed as indicated below, which is stored in the library lvgl as a .template file. Insert this file in the library directory of the Arduino IDE.
+To install the forked repositories, specify the library path for Arduino IDE and copy the libraries:
 
+```
+ARDUINO_LIB_FOLDER="$HOME/Arduino/libraries" && mkdir -p $ARDUINO_LIB_FOLDER && git -C $ARDUINO_LIB_FOLDER clone https://github.com/roloran/SchnorrSig.git && git clone https://github.com/roloran/LilyGO-T-Deck.git /tmp/t-deck && cp -r /tmp/t-deck/lib/{AceButton,ESP32-audioI2S,TFT_eSPI,TinyGPSPlus,TouchLib,es7210,lv_conf.h,lvgl} $ARDUINO_LIB_FOLDER && git -C $ARDUINO_LIB_FOLDER clone https://github.com/roloran/Unishox_Arduino_lib.git && git -C $ARDUINO_LIB_FOLDER clone https://github.com/roloran/SX126x-Arduino.git
+
+```
+Verify that the lv_conf.h file is placed as indicated below:
 ```
 .
 ├── ...
 ├── libraries # Arduino library folder
 │ ├── lvgl # lvgl library folder
-│ ├── lv_conf.h (insert the template file from lvgl library folder and rename it)
+│ ├── lv_conf.h
 └── ...
-```
-
-`lv_conf.h` requires the following adjustments:
-- Enable content (line 15)
-
-```
-#if 1
-```
-- Byte order for RGB colors (line 30)
-```
-#define LV_COLOR_16_SWAP 0
-```
-- Used fonts (line 366 - 368)
-```
-#define LV_FONT_MONTSERRAT_12 1
-#define LV_FONT_MONTSERRAT_14 1
-#define LV_FONT_MONTSERRAT_16 1
 ```
 
 Via `Arduino IDE`, the following dependencies can be installed:
 
-- GFX Library for Arduino by Moon On Our Nation, v1.5.6
+- GFX Library for Arduino by Moon On Our Nation, v1.6.0
 - Crypto by Rhys Weatherley, v0.4.0
 - ESP8266Audio, v2.0.0
 
-Additionally, our implementation needs the [Unishox2 library](https://github.com/siara-cc/Unishox_Arduino_lib), which we forked [here](https://github.com/roloran/Unishox_Arduino_lib) and the SX126x-Arduino library, which we forked [here](https://github.com/roloran/SX126x-Arduino) including some SPI-handling patches.
-
 Our implementation integrates the [Base64 library](https://github.com/Xander-Electronics/Base64) with some namespace adjustments so that it does not have to be installed manually.
 
-When all dependencies are met, the firmware can be compiled using `Arduino CLI` as follows:
+***
 
+When all dependencies are met, the firmware can be compiled using the `compile.sh` or `Arduino CLI` as follows:
+- With `compile.sh`
+```
+./compile.sh
+```
+- With `Arduino CLI`
 ```bash
 arduino-cli compile -v --fqbn "esp32:esp32:esp32s3:CDCOnBoot=cdc,FlashSize=16M,PartitionScheme=app3M_fat9M_16MB" --output-dir build ./
 ```
 
-Flashing the firmware can be done afterward as follows:
-
+Flashing the firmware can be done afterward using `flash.sh` or `Arduino CLI` as follows:
+- With `flash.sh`
+```
+./flash.sh /dev/your-t-deck-device-here
+```
+- With `Arduino CLI`
 ```bash
-DEVICE="/dev/your-t-deck-device-here"
-arduino-cli upload --fqbn "esp32:esp32:esp32s3:CDCOnBoot=cdc,FlashSize=16M,PartitionScheme=app3M_fat9M_16MB" --port $DEVICE --input-dir build
+DEVICE="/dev/your-t-deck-device-here" && arduino-cli upload --fqbn "esp32:esp32:esp32s3:CDCOnBoot=cdc,FlashSize=16M,PartitionScheme=app3M_fat9M_16MB" --port $DEVICE --input-dir build
 ```
 
 Note that you need to identify your T-Deck device's name first (maybe using `Arduino IDE`). Initially flashing the T-Deck with its pre-installed factory firmware might require pressing the knob down during power-on. Please see LilyGo's documentation first if you have not worked with T-Deck devices before.
