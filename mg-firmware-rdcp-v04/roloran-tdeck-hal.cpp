@@ -101,6 +101,8 @@ static void tdeck_display_wake(void)
   tdeck_display_lock();
 
   gfx->displayOn();
+  delay(5);
+  gfx->displayOn();
   bus->sendCommand(ROLODECK_ST7789_NORON);
   delay(10);
   bus->sendCommand(ROLODECK_ST7789_DISPON);
@@ -773,26 +775,26 @@ void tdeck_loop()
   int cpu = get_cpufreq();
   cpu_high();
 
-  if (highlander) xSemaphoreTake(highlander, portMAX_DELAY);
-  gfx->drawPixel(0, 0, 7);
-  gfx->drawPixel(screenWidth-1, 0, 7);
-  gfx->drawPixel(0, screenHeight-1, 7);
-  gfx->drawPixel(screenWidth-1, screenHeight-1, 7);
-  if (highlander) xSemaphoreGive(highlander);
+  if (tdeck_display_is_on)
+  {
+    if (highlander) xSemaphoreTake(highlander, portMAX_DELAY);
+    gfx->drawPixel(0, 0, 7);
+    gfx->drawPixel(screenWidth-1, 0, 7);
+    gfx->drawPixel(0, screenHeight-1, 7);
+    gfx->drawPixel(screenWidth-1, screenHeight-1, 7);
+    if (highlander) xSemaphoreGive(highlander);
+  }
 
   lv_timer_handler();
   delay(1);
 
-  if (gui_need_screen_refresh)
+  if (gui_need_screen_refresh && tdeck_display_is_on)
   {
     gui_need_screen_refresh = false;
-    if (tdeck_display_is_on)
-    {
-      gui_transition_to_screen(gui_get_current_screen());
-      lv_timer_handler();
-      lv_obj_invalidate(lv_scr_act()); // Forces the screen to be redrawn
-      lv_refr_now(NULL); // Forces LVGL to refresh immediately
-    }
+    gui_transition_to_screen(gui_get_current_screen());
+    lv_timer_handler();
+    lv_obj_invalidate(lv_scr_act()); // Forces the screen to be redrawn
+    lv_refr_now(NULL); // Forces LVGL to refresh immediately
   }
 
   if (cpu == 80) cpu_low();
