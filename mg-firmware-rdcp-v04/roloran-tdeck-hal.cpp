@@ -772,10 +772,13 @@ void tdeck_loop()
 
   int cpu = get_cpufreq();
   cpu_high();
+
+  if (highlander) xSemaphoreTake(highlander, portMAX_DELAY);
   gfx->drawPixel(0, 0, 7);
   gfx->drawPixel(screenWidth-1, 0, 7);
   gfx->drawPixel(0, screenHeight-1, 7);
   gfx->drawPixel(screenWidth-1, screenHeight-1, 7);
+  if (highlander) xSemaphoreGive(highlander);
 
   lv_timer_handler();
   delay(1);

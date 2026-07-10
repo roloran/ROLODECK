@@ -102,7 +102,7 @@ void radio_setup(void)
 
   int8_t   PIN_LORA_TXEN = -1; // part of the pinout if TX-Enable is required
   int8_t   PIN_LORA_RXEN = -1; // part of the pinout if RX-Enable is required
-  bool     LORA_USE_DIO2_ANT_SWITCH = false;
+  bool     LORA_USE_DIO2_ANT_SWITCH = true; // RadioLib-compatible setup (?)
   bool     LORA_USE_DIO3_TCXO = true;
   bool     LORA_USE_DIO3_ANT_SWITCH = false;
 
@@ -357,7 +357,8 @@ void radio_loop()
     delay(1);
     digitalWrite(TDECK_RADIO_CS, LOW);
     delay(1);
-    Radio.Standby();
+    // Radio.Standby();
+    startReceiveMode();
     rdcp_callback_cad(new_cad_result_busy);
     set_gui_needs_screen_refresh(true);
   }
@@ -392,13 +393,13 @@ void lora_radio_startcad(uint8_t channel)
 
   if (channel == CHANNEL868DA)
   {
-	  //Radio.SetCadParams(LORA_CAD_08_SYMBOL, getMyLoRaSpreadingFactor() + 13, 10, LORA_CAD_ONLY, 0);
-	  Radio.SetCadParams(LORA_CAD_08_SYMBOL, getMyLoRaSpreadingFactor() + 13, 10, LORA_CAD_RX, 0);
+	  Radio.SetCadParams(LORA_CAD_08_SYMBOL, getMyLoRaSpreadingFactor() + 13, 10, LORA_CAD_ONLY, 0);
+	  //Radio.SetCadParams(LORA_CAD_08_SYMBOL, getMyLoRaSpreadingFactor() + 13, 10, LORA_CAD_RX, 0);
   }
   else 
   {
-	  //Radio.SetCadParams(LORA_CAD_08_SYMBOL, getMyLoRaSpreadingFactorTX() + 13, 10, LORA_CAD_ONLY, 0);
-	  Radio.SetCadParams(LORA_CAD_08_SYMBOL, getMyLoRaSpreadingFactorTX() + 13, 10, LORA_CAD_RX, 0);
+	  Radio.SetCadParams(LORA_CAD_08_SYMBOL, getMyLoRaSpreadingFactorTX() + 13, 10, LORA_CAD_ONLY, 0);
+	  //Radio.SetCadParams(LORA_CAD_08_SYMBOL, getMyLoRaSpreadingFactorTX() + 13, 10, LORA_CAD_RX, 0);
   }
   delay(1);
 	Radio.StartCad();
