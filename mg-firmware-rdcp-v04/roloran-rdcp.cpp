@@ -1419,12 +1419,10 @@ bool rdcp_txqueue_loop(void)
   if ((current_channel == CHANNEL868DA) && (txq.entries[tx_ongoing].tx_channel == CHANNEL868MG))
   {
     radio_switch_channel(CHANNEL868MG);
-    current_channel = CHANNEL868MG;
   }
   if ((current_channel == CHANNEL868MG) && (txq.entries[tx_ongoing].tx_channel == CHANNEL868DA))
   {
     radio_switch_channel(CHANNEL868DA);
-    current_channel = CHANNEL868DA;
   }
 
   if (txq.entries[tx_ongoing].force_tx == false)
@@ -1594,7 +1592,6 @@ bool rdcp_send_message_force(void)
     serial_writeln("WARNING: rdcp_send_message_force() called with no tx_ongoing");
     // lora_radio_receivemode();
     radio_switch_channel(CHANNEL868DA);
-    current_channel = CHANNEL868DA;
     return false;
   }
   int64_t now = my_millis();
@@ -1631,7 +1628,6 @@ void rdcp_callback_txfin(void)
   {
     serial_writeln("WARNING: rdcp_callback_txfin() without tx_ongoing");
     radio_switch_channel(CHANNEL868DA);
-    current_channel = CHANNEL868DA;
     return;
   }
 
@@ -1702,10 +1698,35 @@ void rdcp_callback_txfin(void)
     rdcp_txqueue_reschedule(random(1000 * sf_multiplier, 2000 * sf_multiplier));
 
     radio_switch_channel(CHANNEL868DA);
-    current_channel = CHANNEL868DA;
   }
 
   return;
+}
+
+void rdcp_callback_radio_failure(const char *reason)
+{
+  char buf[INFOLEN];
+  last_tx_activity = my_millis();
+
+  if (tx_ongoing == -1)
+  {
+    snprintf(buf, INFOLEN, "WARNING: Radio failure without tx_ongoing: %s", reason);
+    serial_writeln(buf);
+    radio_switch_channel(CHANNEL868DA);
+    return;
+  }
+
+  snprintf(buf, INFOLEN, "WARNING: Radio failure for TXQi %d: %s; scheduling retry",
+           tx_ongoing, reason);
+  serial_writeln(buf);
+
+  txq.entries[tx_ongoing].in_process = false;
+  txq.entries[tx_ongoing].cad_retry = 0;
+  tx_ongoing = -1;
+  retransmission_count = 0;
+
+  radio_switch_channel(CHANNEL868DA);
+  rdcp_txqueue_reschedule(random(1000 * sf_multiplier, 2000 * sf_multiplier));
 }
 
 bool rdcp_callback_cad(bool cad_busy)
@@ -1719,7 +1740,6 @@ bool rdcp_callback_cad(bool cad_busy)
   {
     serial_writeln("WARNING: CAD attempted without ongoing transmission");
     radio_switch_channel(CHANNEL868DA);
-    current_channel = CHANNEL868DA;
     return false;
   }
 
@@ -1745,7 +1765,6 @@ bool rdcp_callback_cad(bool cad_busy)
     // lora_radio_receivemode();
     uint8_t previous_channel = current_channel;
     radio_switch_channel(CHANNEL868DA);
-    current_channel = CHANNEL868DA;
     txq.entries[tx_ongoing].in_process = false;
     tx_ongoing = -1;
     int64_t random_delay = random(2100 * sf_multiplier, 2500 * sf_multiplier);
@@ -1768,7 +1787,6 @@ bool rdcp_callback_cad(bool cad_busy)
 //    lora_radio_receivemode();
     uint8_t previous_channel = current_channel;
     radio_switch_channel(CHANNEL868DA);
-    current_channel = CHANNEL868DA;
     txq.entries[tx_ongoing].in_process = false;
     tx_ongoing = -1;
     int64_t random_delay = random(3100 * sf_multiplier, 3500 * sf_multiplier);

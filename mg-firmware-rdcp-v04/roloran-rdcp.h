@@ -423,6 +423,13 @@ bool rdcp_send_message_force(void);
 void rdcp_callback_txfin(void);
 
 /**
+ * Recover RDCP TX queue state after the radio cannot start or finish a
+ * transmission. The current message remains queued for a later retry.
+ * @param reason Short diagnostic reason emitted to the serial log
+ */
+void rdcp_callback_radio_failure(const char *reason);
+
+/**
  * Callback when a LoRa CAD event has results. If the channel is free,
  * transmission of the `tx_ongoing` RDCP Message starts. Otherwise,
  * repeated CAD attempts and re-scheduling processes are triggered

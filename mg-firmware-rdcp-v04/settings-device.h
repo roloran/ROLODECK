@@ -96,7 +96,7 @@ void     setMyLoRaSyncWord(uint8_t syncword);
 void     setMyLoRaSyncWordTX(uint8_t syncword);
 
 /**
- * @param power LoRa TX power to use in dBm (usually 0--22)
+ * @param power LoRa TX power to use in dBm (SX1262 range: -9--22)
  */
 void     setMyLoRaPower(int power);
 void     setMyLoRaPowerTX(int power);

@@ -19,7 +19,7 @@
        (LVGL 8.4.0 is used)
 
        https://github.com/siara-cc/Unishox_Arduino_lib (not installable through Arduino IDE)
-       https://github.com/roloran/SX126x-Arduino (based on Bernd Giesecke's SX126x-Arduino library)
+       RadioLib v7.7.1 or newer (installable through Arduino IDE / Arduino CLI)
        TODO (Schnorr signature library)
 
     Install libraries via Arduino IDE:
@@ -76,7 +76,7 @@ int32_t min_free_heap = 0;
 void setup(void)
 {
   tdeck_setup();                // Initialize the LilyGo hardware; must be first
-  radio_setup();                // Initialize SX1262; must be second due to SPI quirks
+  radio_setup();                // Initialize SX1262 through RadioLib on the shared SPI bus
   persistence_setup();          // Initialize persistence
   provisioned = persistence_configure_device_settings(); // Initialize device settings based on provisioning
 
@@ -155,8 +155,8 @@ void loop(void)
     if (!hq_mode) rdcp_check_cirefile(); // Send any persisted CIRE if we lost power before having it ACK'd or given up
   }
 
-  tdeck_loop(); // Periodically let the GUI do its work
   radio_loop(); // Periodically let the Radio API do its work
+  tdeck_loop(); // Periodically let the GUI do its work
   check_screensaver_activation(); // Turn on the screensaver if device is idle
 
   String s = serial_readln(); // Check for new commands received over Serial

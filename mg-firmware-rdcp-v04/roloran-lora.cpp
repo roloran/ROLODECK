@@ -1,11 +1,10 @@
 #include <Arduino.h>
 #include <SPI.h>
-#include <Ticker.h>
-#include <rom/rtc.h>
-#include <driver/rtc_io.h>
-#include <SX126x-Arduino.h>
-#include "Base64ren.h"
+#include <RadioLib.h>
+#include <esp_timer.h>
+#include <math.h>
 
+#include "Base64ren.h"
 #include "settings-device.h"
 #include "settings-scenario.h"
 #include "roloran-tdeck-hal.h"
@@ -13,403 +12,449 @@
 #include "roloran-tdeck-serial.h"
 #include "roloran-rdcp.h"
 
-#define BUFFER_SIZE 512 // Maximum buffer size, e.g., for handling LoRa payloads
+#define BUFFER_SIZE 512
+#define RADIO_SPI_FREQUENCY 2000000UL
+#define RADIO_TX_TIMEOUT_MS 30000
+#define TDECK_SX1262_TCXO_VOLTAGE 1.6f
 
-static RadioEvents_t RadioEvents;
-hw_config            hwConfig;
-volatile uint8_t     cad_repeat = 0;
-volatile int64_t     tx_time = 0;
-volatile int64_t     rx_timestamp = NO_TIMESTAMP;
+enum RadioOperation : uint8_t
+{
+  RADIO_OPERATION_NONE,
+  RADIO_OPERATION_RX,
+  RADIO_OPERATION_TX,
+  RADIO_OPERATION_CAD
+};
 
-volatile bool        has_message_to_send = false;
-uint8_t              outgoing_message[BUFFER_SIZE];
-uint8_t              outgoing_message_size = 0;
-volatile bool        ongoing_transmission = false;
+struct RadioChannelConfig
+{
+  float frequency;
+  float bandwidth;
+  uint8_t spreading_factor;
+  uint8_t coding_rate;
+  uint8_t sync_word;
+  int8_t power;
+  uint16_t preamble_length;
+};
 
-volatile bool        has_received_message = false;
-volatile bool        do_start_send = false;
-volatile bool        tx_finished = false;
-int64_t              tx_wallclock_time = NO_DURATION;
-uint8_t              cad_stats_tries = 0;
-volatile bool        has_timeout_tx = false;
-volatile bool        has_timeout_rx = false;
-volatile bool        has_error_rx = false;
+static Module radio_module(TDECK_RADIO_CS, TDECK_RADIO_DIO1, TDECK_RADIO_RST,
+                           TDECK_RADIO_BUSY, SPI,
+                           SPISettings(RADIO_SPI_FREQUENCY, MSBFIRST, SPI_MODE0));
+static SX1262 radio(&radio_module);
 
-uint8_t              receive_buffer[BUFFER_SIZE];
-uint16_t             receive_buffer_length = 0;
-int16_t              receive_rssi = 0;
-uint8_t              receive_snr = 0;
+static volatile bool radio_irq_pending = false;
+static volatile int64_t radio_irq_timestamp = NO_TIMESTAMP;
+static volatile RadioOperation radio_operation = RADIO_OPERATION_NONE;
+static bool radio_initialized = false;
+static int64_t tx_time = NO_TIMESTAMP;
 
-volatile bool        new_message_available = false;
+static uint8_t receive_buffer[BUFFER_SIZE];
+static uint16_t receive_buffer_length = 0;
+static int16_t receive_rssi = 0;
+static int8_t receive_snr = 0;
+static int64_t rx_timestamp = NO_TIMESTAMP;
+static volatile bool new_message_available = false;
 
-volatile bool        new_cad_result_available = false;
-volatile bool        new_cad_result_busy = false;
-volatile bool        has_txed = false;
-volatile int64_t     has_txed_timestamp = NO_TIMESTAMP;
+volatile bool has_txed = false;
+volatile int64_t has_txed_timestamp = NO_TIMESTAMP;
 
-extern int64_t       last_screen_switch_timestamp;
+extern uint8_t current_channel;
 
-/**
- * @return int64_t Current monotonic clock time in milliseconds. 
-*/
-int64_t timeNow(void) { return my_millis(); }
+static char current_rdcp_msg_base64[FATLEN];
+
+static void IRAM_ATTR on_radio_irq(void)
+{
+  radio_irq_timestamp = esp_timer_get_time() / 1000;
+  radio_irq_pending = true;
+}
+
+static void prepare_radio_operation(RadioOperation operation)
+{
+  noInterrupts();
+  radio_irq_pending = false;
+  radio_irq_timestamp = NO_TIMESTAMP;
+  radio_operation = operation;
+  interrupts();
+}
+
+static bool take_radio_irq(RadioOperation *operation, int64_t *timestamp)
+{
+  bool pending;
+  noInterrupts();
+  pending = radio_irq_pending;
+  if (pending)
+  {
+    radio_irq_pending = false;
+    *operation = radio_operation;
+    *timestamp = radio_irq_timestamp;
+    radio_operation = RADIO_OPERATION_NONE;
+  }
+  interrupts();
+  return pending;
+}
+
+static void log_radiolib_error(const char *operation, int16_t state)
+{
+  serial_writeln("ERROR: RadioLib " + String(operation) + " failed with code " + String(state));
+}
+
+static RadioChannelConfig get_channel_config(uint8_t channel)
+{
+  RadioChannelConfig config;
+  if (channel == CHANNEL868MG)
+  {
+    config.frequency = getMyLoRaFrequencyTX();
+    config.bandwidth = getMyLoRaBandwidthTX();
+    config.spreading_factor = getMyLoRaSpreadingFactorTX();
+    config.coding_rate = getMyLoRaCodingRateTX();
+    config.sync_word = getMyLoRaSyncWordTX();
+    config.power = getMyLoRaPowerTX();
+    config.preamble_length = getMyLoRaPreambleLengthTX();
+  }
+  else
+  {
+    config.frequency = getMyLoRaFrequency();
+    config.bandwidth = getMyLoRaBandwidth();
+    config.spreading_factor = getMyLoRaSpreadingFactor();
+    config.coding_rate = getMyLoRaCodingRate();
+    config.sync_word = getMyLoRaSyncWord();
+    config.power = getMyLoRaPower();
+    config.preamble_length = getMyLoRaPreambleLength();
+  }
+  return config;
+}
+
+static int16_t configure_radio(const RadioChannelConfig &config)
+{
+  int16_t state;
+  tdeck_spi_lock();
+  state = radio.standby();
+  if (state == RADIOLIB_ERR_NONE) state = radio.setFrequency(config.frequency);
+  if (state == RADIOLIB_ERR_NONE) state = radio.setBandwidth(config.bandwidth);
+  if (state == RADIOLIB_ERR_NONE) state = radio.setSpreadingFactor(config.spreading_factor);
+  if (state == RADIOLIB_ERR_NONE) state = radio.setCodingRate(config.coding_rate);
+  if (state == RADIOLIB_ERR_NONE) state = radio.setSyncWord(config.sync_word);
+  if (state == RADIOLIB_ERR_NONE) state = radio.setOutputPower(config.power);
+  if (state == RADIOLIB_ERR_NONE) state = radio.setPreambleLength(config.preamble_length);
+  if (state == RADIOLIB_ERR_NONE) state = radio.explicitHeader();
+  if (state == RADIOLIB_ERR_NONE) state = radio.setCRC(2);
+  if (state == RADIOLIB_ERR_NONE) state = radio.invertIQ(false);
+  if (state == RADIOLIB_ERR_NONE) state = radio.autoLDRO();
+  tdeck_spi_unlock();
+  return state;
+}
 
 int16_t getReceiveRSSI(void) { return receive_rssi; }
-uint8_t getReceiveSNR(void)  { return receive_snr; }
+int8_t getReceiveSNR(void) { return receive_snr; }
+bool radio_is_initialized(void) { return radio_initialized; }
 
-void lora_send_now_base64(String txstring)
+char *get_current_rdcp_msg_base64(void) { return current_rdcp_msg_base64; }
+
+void set_current_rdcp_msg_base64(char *m64)
 {
-  char buffer[BUFFER_SIZE];
-
-  serial_writeln(txstring);
-
-  String b64msg = txstring.substring(3);
-  b64msg.toCharArray(buffer, BUFFER_SIZE);
-  int b64msg_len = strlen(buffer);
-  int decoded_length = Base64ren.decodedLength(buffer, b64msg_len);
-  char decoded_string[decoded_length + 1];
-
-  Base64ren.decode(decoded_string, buffer, b64msg_len);
-	for (int i=0; i < decoded_length; i++) outgoing_message[i] = decoded_string[i];
-
-	outgoing_message_size = decoded_length;
-	has_message_to_send = true;
-
-  serial_writeln("INFO: LoRa payload size to transmit is " + String(outgoing_message_size) + " bytes.");
-
-  return;
+  snprintf(current_rdcp_msg_base64, FATLEN, "%s", m64);
 }
 
 void startReceiveMode(void)
 {
-  digitalWrite(TDECK_TFT_CS, HIGH);
-  delay(1);
-  digitalWrite(TDECK_RADIO_CS, LOW);
-  delay(1);
+  if (!radio_initialized) return;
 
-	Radio.Standby();
-	SX126xSetDioIrqParams(IRQ_RX_DONE | IRQ_RX_TX_TIMEOUT,
-		                    IRQ_RX_DONE | IRQ_RX_TX_TIMEOUT,
-	                      IRQ_RADIO_NONE, IRQ_RADIO_NONE);
-	// Radio.SetRxDutyCycle(2 * 1024 * 1000 * 15.625, 10 * 1024 * 1000 * 15.625);
-  Radio.Rx(0); // Start to receive without timeout.
-	return;
+  prepare_radio_operation(RADIO_OPERATION_RX);
+  tdeck_spi_lock();
+  int16_t state = radio.startReceive();
+  tdeck_spi_unlock();
+
+  if (state != RADIOLIB_ERR_NONE)
+  {
+    prepare_radio_operation(RADIO_OPERATION_NONE);
+    radio_initialized = false;
+    log_radiolib_error("startReceive", state);
+  }
 }
 
 void radio_setup(void)
 {
-  static bool radio_hardware_initialized = false;
+  serial_writeln("INFO: Setting up SX1262 with RadioLib, switching to CHANNEL868DA");
 
-  int8_t   PIN_LORA_TXEN = -1; // part of the pinout if TX-Enable is required
-  int8_t   PIN_LORA_RXEN = -1; // part of the pinout if RX-Enable is required
-  bool     LORA_USE_DIO2_ANT_SWITCH = true; // RadioLib-compatible setup (?)
-  bool     LORA_USE_DIO3_TCXO = true;
-  bool     LORA_USE_DIO3_ANT_SWITCH = false;
+  prepare_radio_operation(RADIO_OPERATION_NONE);
+  radio_initialized = false;
+  RadioChannelConfig config = get_channel_config(CHANNEL868DA);
+  ConfigLoRa_t radio_config;
+  radio_config.frequency = config.frequency;
+  radio_config.bandwidth = config.bandwidth;
+  radio_config.spreadingFactor = config.spreading_factor;
+  radio_config.codingRate = config.coding_rate;
+  radio_config.syncWord = config.sync_word;
+  radio_config.power = config.power;
+  radio_config.preambleLength = config.preamble_length;
 
-	hwConfig.CHIP_TYPE           = SX1262_CHIP;
-	hwConfig.PIN_LORA_RESET      = TDECK_RADIO_RST;
-	hwConfig.PIN_LORA_NSS        = TDECK_RADIO_CS;
-	hwConfig.PIN_LORA_SCLK       = TDECK_SPI_SCK;
-	hwConfig.PIN_LORA_MISO       = TDECK_SPI_MISO;
-	hwConfig.PIN_LORA_DIO_1      = TDECK_RADIO_DIO1;
-	hwConfig.PIN_LORA_BUSY       = TDECK_RADIO_BUSY;
-	hwConfig.PIN_LORA_MOSI       = TDECK_SPI_MOSI;
-	hwConfig.RADIO_TXEN          = PIN_LORA_TXEN;
-	hwConfig.RADIO_RXEN          = PIN_LORA_RXEN;
-	hwConfig.USE_DIO2_ANT_SWITCH = LORA_USE_DIO2_ANT_SWITCH;
-	hwConfig.USE_DIO3_TCXO       = LORA_USE_DIO3_TCXO;
-	hwConfig.USE_DIO3_ANT_SWITCH = LORA_USE_DIO3_ANT_SWITCH;
+  // LilyGo T-Deck Plus defaults: DIO3-controlled 1.6 V TCXO, DC-DC regulator,
+  // and DIO2-controlled RF switch (the latter is enabled by RadioLib begin()).
+  radio.tcxoVoltage = TDECK_SX1262_TCXO_VOLTAGE;
+  radio.useRegulatorLDO = false;
 
-  serial_writeln("INFO: Setting up LoRa radio, switching to CHANNEL868DA");
+  tdeck_spi_lock();
+  int16_t state = radio.begin(radio_config);
+  if (state == RADIOLIB_ERR_NONE) state = radio.explicitHeader();
+  if (state == RADIOLIB_ERR_NONE) state = radio.setCRC(2);
+  if (state == RADIOLIB_ERR_NONE) state = radio.invertIQ(false);
+  if (state == RADIOLIB_ERR_NONE) state = radio.autoLDRO();
+  tdeck_spi_unlock();
 
-  if (radio_hardware_initialized == false)
+  if (state != RADIOLIB_ERR_NONE)
   {
-	  lora_hardware_init(hwConfig);
-    radio_hardware_initialized = true;
-  }
-	Radio.Init(&RadioEvents);
-
-  uint32_t freq = getMyLoRaFrequency() * 1000 * 1000;
-
-	Radio.SetChannel(freq);
-
-  if (getMyLoRaSyncWord() != 0x34)
-  {
-    Radio.SetPublicNetwork(false);
-  }
-  else
-  {
-    Radio.SetPublicNetwork(true);
+    log_radiolib_error("begin", state);
+    return;
   }
 
-  uint8_t TX_OUTPUT_POWER = getMyLoRaPower();
-  uint8_t LORA_BANDWIDTH = 0;
-  if (getMyLoRaBandwidth() == 250.0) LORA_BANDWIDTH = 1;
-  if (getMyLoRaBandwidth() == 500.0) LORA_BANDWIDTH = 2;
-  uint8_t LORA_SPREADING_FACTOR = getMyLoRaSpreadingFactor();
-  uint8_t LORA_CODINGRATE = getMyLoRaCodingRate() - 4;
-  uint8_t LORA_PREAMBLE_LENGTH = getMyLoRaPreambleLength();
-
-  uint8_t  LORA_SYMBOL_TIMEOUT = 0;
-  bool     LORA_FIX_LENGTH_PAYLOAD_ON = false;
-  bool     LORA_IQ_INVERSION_ON = false;
-  uint16_t TX_TIMEOUT_VALUE = 30 * SECONDS_TO_MILLISECONDS;
-
-	Radio.SetTxConfig(MODEM_LORA, TX_OUTPUT_POWER, 0, LORA_BANDWIDTH,
-	                  LORA_SPREADING_FACTOR, LORA_CODINGRATE,
-	                  LORA_PREAMBLE_LENGTH, LORA_FIX_LENGTH_PAYLOAD_ON,
-	                  true, 0, 0, LORA_IQ_INVERSION_ON, TX_TIMEOUT_VALUE);
-
-	Radio.SetRxConfig(MODEM_LORA, LORA_BANDWIDTH, LORA_SPREADING_FACTOR,
-	                  LORA_CODINGRATE, 0, LORA_PREAMBLE_LENGTH,
-	                  LORA_SYMBOL_TIMEOUT, LORA_FIX_LENGTH_PAYLOAD_ON,
-	                  0, true, 0, 0, LORA_IQ_INVERSION_ON, true);
-
-  RadioEvents.TxDone    = OnTxDone;
-	RadioEvents.RxDone    = OnRxDone;
-	RadioEvents.TxTimeout = OnTxTimeout;
-	RadioEvents.RxTimeout = OnRxTimeout;
-	RadioEvents.RxError   = OnRxError;
-	RadioEvents.CadDone   = OnCadDone;
-
+  radio.setDio1Action(on_radio_irq);
+  radio_initialized = true;
+  current_channel = CHANNEL868DA;
   startReceiveMode();
-
-	return;
 }
 
 void radio_apply_new_configuration(void)
 {
-  digitalWrite(TDECK_TFT_CS, HIGH);
-  delay(1);
-  digitalWrite(TDECK_RADIO_CS, LOW);
-  delay(1);
-	Radio.Standby();
   radio_setup();
 }
 
-extern uint8_t current_channel;
-
 void radio_switch_channel(uint8_t channel)
 {
-  digitalWrite(TDECK_TFT_CS, HIGH);
-  delay(1);
-  digitalWrite(TDECK_RADIO_CS, LOW);
-  delay(1);
-	Radio.Standby();
-
-  if (channel == CHANNEL868DA)
-  {
-    serial_writeln("INFO: Switching radio to CHANNEL868DA");
-  }
-  else if (channel == CHANNEL868MG)
-  {
-    serial_writeln("INFO: Switching radio to CHANNEL868MG");
-  }
-  else 
+  if ((channel != CHANNEL868DA) && (channel != CHANNEL868MG))
   {
     serial_writeln("WARNING: Invalid LoRa radio channel switch");
     return;
   }
 
+  if (!radio_initialized)
+  {
+    radio_setup();
+    if (!radio_initialized) return;
+  }
+
+  serial_writeln(channel == CHANNEL868DA
+                   ? "INFO: Switching radio to CHANNEL868DA"
+                   : "INFO: Switching radio to CHANNEL868MG");
+
+  RadioChannelConfig config = get_channel_config(channel);
+  prepare_radio_operation(RADIO_OPERATION_NONE);
+  int16_t state = configure_radio(config);
+  if (state != RADIOLIB_ERR_NONE)
+  {
+    log_radiolib_error("channel configuration", state);
+    radio_initialized = false;
+    radio_setup();
+    return;
+  }
+
   current_channel = channel;
-
-  uint32_t freq;
-  if (channel == CHANNEL868DA) freq = getMyLoRaFrequency() * 1000 * 1000; 
-  else freq = getMyLoRaFrequencyTX() * 1000 * 1000;
-	Radio.SetChannel(freq);
-
-  uint8_t sw;
-  if (channel == CHANNEL868DA) sw = getMyLoRaSyncWord();
-  else sw = getMyLoRaSyncWordTX();
-  if (sw != 0x34)
-  {
-    Radio.SetPublicNetwork(false);
-  }
-  else
-  {
-    Radio.SetPublicNetwork(true);
-  }
-
-  uint8_t TX_OUTPUT_POWER;
-  if (channel == CHANNEL868DA) TX_OUTPUT_POWER = getMyLoRaPower();
-  else TX_OUTPUT_POWER = getMyLoRaPowerTX();
-
-  uint8_t LORA_BANDWIDTH = 0;
-  uint8_t lbw;
-  if (channel == CHANNEL868DA) lbw = getMyLoRaBandwidth();
-  else lbw = getMyLoRaBandwidthTX();
-  if (lbw == 250.0) LORA_BANDWIDTH = 1;
-  if (lbw == 500.0) LORA_BANDWIDTH = 2;
-
-  uint8_t LORA_SPREADING_FACTOR;
-  if (channel == CHANNEL868DA) LORA_SPREADING_FACTOR = getMyLoRaSpreadingFactor();
-  else LORA_SPREADING_FACTOR = getMyLoRaSpreadingFactorTX();
-
-  uint8_t LORA_CODINGRATE;
-  if (channel == CHANNEL868DA) LORA_CODINGRATE = getMyLoRaCodingRate() - 4;
-  else LORA_CODINGRATE = getMyLoRaCodingRateTX() - 4;
-
-  uint8_t LORA_PREAMBLE_LENGTH;
-  if (channel == CHANNEL868DA) LORA_PREAMBLE_LENGTH = getMyLoRaPreambleLength();
-  else LORA_PREAMBLE_LENGTH = getMyLoRaPreambleLengthTX();
-
-  uint8_t  LORA_SYMBOL_TIMEOUT = 0;
-  bool     LORA_FIX_LENGTH_PAYLOAD_ON = false;
-  bool     LORA_IQ_INVERSION_ON = false;
-  uint16_t TX_TIMEOUT_VALUE = 30 * SECONDS_TO_MILLISECONDS;
-
-	Radio.SetTxConfig(MODEM_LORA, TX_OUTPUT_POWER, 0, LORA_BANDWIDTH,
-	                  LORA_SPREADING_FACTOR, LORA_CODINGRATE,
-	                  LORA_PREAMBLE_LENGTH, LORA_FIX_LENGTH_PAYLOAD_ON,
-	                  true, 0, 0, LORA_IQ_INVERSION_ON, TX_TIMEOUT_VALUE);
-
-	Radio.SetRxConfig(MODEM_LORA, LORA_BANDWIDTH, LORA_SPREADING_FACTOR,
-	                  LORA_CODINGRATE, 0, LORA_PREAMBLE_LENGTH,
-	                  LORA_SYMBOL_TIMEOUT, LORA_FIX_LENGTH_PAYLOAD_ON,
-	                  0, true, 0, 0, LORA_IQ_INVERSION_ON, true);
-
-  RadioEvents.TxDone    = OnTxDone;
-	RadioEvents.RxDone    = OnRxDone;
-	RadioEvents.TxTimeout = OnTxTimeout;
-	RadioEvents.RxTimeout = OnRxTimeout;
-	RadioEvents.RxError   = OnRxError;
-	RadioEvents.CadDone   = OnCadDone;
-
   startReceiveMode();
 
   char radio_info[INFOLEN];
-  snprintf(radio_info, INFOLEN, "INFO: Channel %d parameters are F %d SW %02X PW %d BW %d SF %d CR %d PL %d", 
-           channel, freq, sw, TX_OUTPUT_POWER, LORA_BANDWIDTH, LORA_SPREADING_FACTOR, LORA_CODINGRATE, LORA_PREAMBLE_LENGTH);
+  snprintf(radio_info, INFOLEN,
+           "INFO: Channel %d parameters are F %.3f MHz SW %02X PW %d dBm BW %.1f kHz SF %d CR 4/%d PL %d",
+           channel, config.frequency, config.sync_word, config.power, config.bandwidth,
+           config.spreading_factor, config.coding_rate, config.preamble_length);
   serial_writeln(radio_info);
-
-  return;
 }
 
-char current_rdcp_msg_base64[FATLEN];           // Base64-encoded version of currently processed message
-char *get_current_rdcp_msg_base64(void) { return current_rdcp_msg_base64; }
-void set_current_rdcp_msg_base64(char *m64)
+static void process_received_packet(int64_t interrupt_timestamp)
 {
-  snprintf(current_rdcp_msg_base64, FATLEN, "%s", m64);
-  return;
-}
+  size_t packet_length;
+  float packet_rssi;
+  float packet_snr;
 
-void radio_loop()
-{
+  tdeck_spi_lock();
+  packet_length = radio.getPacketLength();
+  packet_rssi = radio.getRSSI();
+  packet_snr = radio.getSNR();
+  int16_t state = radio.readData(receive_buffer, packet_length);
+  tdeck_spi_unlock();
+
+  startReceiveMode();
+
+  if (state == RADIOLIB_ERR_CRC_MISMATCH)
+  {
+    serial_writeln("WARNING: RadioLib rejected LoRa packet with invalid PHY CRC");
+    return;
+  }
+  if (state != RADIOLIB_ERR_NONE)
+  {
+    log_radiolib_error("readData", state);
+    return;
+  }
+  if ((packet_length == 0) || (packet_length > RDCP_MAX_PAYLOAD_SIZE_LORA))
+  {
+    serial_writeln("WARNING: Dropping LoRa packet with unsupported length " + String(packet_length));
+    return;
+  }
+
+  receive_buffer_length = packet_length;
+  receive_rssi = (int16_t)lroundf(packet_rssi);
+  receive_snr = (int8_t)lroundf(packet_snr);
+  rx_timestamp = interrupt_timestamp;
+  new_message_available = true;
+
+  serial_writeln("INFO: LoRa Radio received packet.");
   char buf[BUFFER_SIZE];
+  snprintf(buf, BUFFER_SIZE, "RXMETA %u %d %d %.3f", receive_buffer_length,
+           receive_rssi, receive_snr,
+           current_channel == CHANNEL868DA ? getMyLoRaFrequency() : getMyLoRaFrequencyTX());
+  serial_writeln(String(buf));
 
-  if (tx_finished == true)
+  int encoded_length = Base64ren.encodedLength(receive_buffer_length);
+  char encoded_string[encoded_length + 1];
+  Base64ren.encode(encoded_string, (char *)receive_buffer, receive_buffer_length);
+  serial_writeln("RX " + String(encoded_string));
+  snprintf(current_rdcp_msg_base64, FATLEN, "%s", encoded_string);
+  set_gui_needs_screen_refresh(true);
+}
+
+static void process_finished_transmission(void)
+{
+  tdeck_spi_lock();
+  int16_t state = radio.finishTransmit();
+  tdeck_spi_unlock();
+
+  int64_t tx_wallclock_time = my_millis() - tx_time;
+  startReceiveMode();
+
+  if (state != RADIOLIB_ERR_NONE)
   {
-    tx_finished = false;
-    ongoing_transmission = false;
+    log_radiolib_error("finishTransmit", state);
+    rdcp_callback_radio_failure("TX completion");
+    return;
+  }
+
+  serial_writeln("INFO: LoRa transmission successfully finished!");
+  serial_writeln("INFO: TX wallclock time was " + String(tx_wallclock_time) + " ms");
+  rdcp_callback_txfin();
+  has_txed = true;
+  has_txed_timestamp = my_millis();
+  set_gui_needs_screen_refresh(true);
+}
+
+static void process_cad_result(void)
+{
+  tdeck_spi_lock();
+  int16_t state = radio.getChannelScanResult();
+  tdeck_spi_unlock();
+
+  startReceiveMode();
+
+  if ((state != RADIOLIB_LORA_DETECTED) && (state != RADIOLIB_CHANNEL_FREE))
+  {
+    log_radiolib_error("getChannelScanResult", state);
+    rdcp_callback_radio_failure("CAD result");
+    return;
+  }
+
+  rdcp_callback_cad(state == RADIOLIB_LORA_DETECTED);
+  set_gui_needs_screen_refresh(true);
+}
+
+void radio_loop(void)
+{
+  RadioOperation completed_operation = RADIO_OPERATION_NONE;
+  int64_t interrupt_timestamp = NO_TIMESTAMP;
+  if (take_radio_irq(&completed_operation, &interrupt_timestamp))
+  {
+    if (completed_operation == RADIO_OPERATION_RX)
+    {
+      process_received_packet(interrupt_timestamp);
+    }
+    else if (completed_operation == RADIO_OPERATION_TX)
+    {
+      process_finished_transmission();
+    }
+    else if (completed_operation == RADIO_OPERATION_CAD)
+    {
+      process_cad_result();
+    }
+    else
+    {
+      serial_writeln("WARNING: Ignoring unexpected SX1262 DIO1 interrupt");
+      startReceiveMode();
+    }
+  }
+
+  if ((radio_operation == RADIO_OPERATION_TX) &&
+      (my_millis() - tx_time >= RADIO_TX_TIMEOUT_MS))
+  {
+    prepare_radio_operation(RADIO_OPERATION_NONE);
+    tdeck_spi_lock();
+    int16_t state = radio.finishTransmit();
+    tdeck_spi_unlock();
+    if (state != RADIOLIB_ERR_NONE) log_radiolib_error("TX timeout cleanup", state);
+    serial_writeln("WARNING: LoRa TX timeout; returning the message to the RDCP queue");
     startReceiveMode();
-	  serial_writeln("INFO: LoRa transmission successfully finished!");
-	  serial_writeln("INFO: TX wallclock time was " + String(tx_wallclock_time) + " ms");
-    rdcp_callback_txfin();
-    has_txed = true;
-    has_txed_timestamp = my_millis();
-    set_gui_needs_screen_refresh(true);
+    rdcp_callback_radio_failure("TX timeout");
   }
-
-  if (has_received_message == true)
-  {
-    has_received_message = false;
-    new_message_available = true;
-
-    startReceiveMode(); /* make sure we can receive further LoRa packets */
-
-	  serial_writeln("INFO: LoRa Radio received packet.");
-    snprintf(buf, BUFFER_SIZE-1, "RXMETA %d %d %d %.3f\0", receive_buffer_length, receive_rssi, receive_snr, 
-      current_channel == CHANNEL868DA ? getMyLoRaFrequency() : getMyLoRaFrequencyTX());
-	  serial_writeln(String(buf));
-
-    int encodedLength = Base64ren.encodedLength(receive_buffer_length);
-    char encodedString[encodedLength + 1];
-    Base64ren.encode(encodedString, (char *) receive_buffer, receive_buffer_length);
-    serial_writeln("RX " + String(encodedString));
-    snprintf(current_rdcp_msg_base64, FATLEN, "%s\0", encodedString);
-    set_gui_needs_screen_refresh(true);
-  }
-
-  if (has_timeout_tx == true)
-  {
-    has_timeout_tx = false;
-    serial_writeln("WARNING: LoRa TX_timeout. Retrying.");
-    radio_apply_new_configuration(); // Re-initalize the radio
-    startReceiveMode();
-    has_message_to_send = true;
-    ongoing_transmission = false;
-  }
-
-  if ((has_timeout_rx == true) || (has_error_rx == true))
-  {
-    if (has_timeout_rx) serial_writeln("WARNING: LoRa RX_timeout.");
-    if (has_error_rx) serial_writeln("WARNING: LoRa RX_error.");
-    has_timeout_rx = false;
-    has_error_rx = false;
-    radio_apply_new_configuration(); // Re-initalize the radio
-    startReceiveMode();
-  }
-
-  if (new_cad_result_available == true)
-  {
-    new_cad_result_available = false;
-    digitalWrite(TDECK_TFT_CS, HIGH);
-    delay(1);
-    digitalWrite(TDECK_RADIO_CS, LOW);
-    delay(1);
-    // Radio.Standby();
-    startReceiveMode();
-    rdcp_callback_cad(new_cad_result_busy);
-    set_gui_needs_screen_refresh(true);
-  }
-
-	return;
 }
 
 bool lora_radio_send(uint8_t *data, uint8_t len)
 {
-  if (len == 0) return false;
-  tx_time = timeNow();
-  digitalWrite(TDECK_TFT_CS, HIGH);
-  delay(1);
-  digitalWrite(TDECK_RADIO_CS, LOW);
-  delay(1);
-  Radio.Send(data, len);
+  if ((len == 0) || (len > RDCP_MAX_PAYLOAD_SIZE_LORA)) return false;
+  if (!radio_initialized)
+  {
+    serial_writeln("ERROR: Cannot transmit because the SX1262 is not initialized");
+    rdcp_callback_radio_failure("radio unavailable");
+    return false;
+  }
+
+  tx_time = my_millis();
+  prepare_radio_operation(RADIO_OPERATION_TX);
+  tdeck_spi_lock();
+  int16_t state = radio.startTransmit(data, len);
+  tdeck_spi_unlock();
+
+  if (state != RADIOLIB_ERR_NONE)
+  {
+    prepare_radio_operation(RADIO_OPERATION_NONE);
+    log_radiolib_error("startTransmit", state);
+    startReceiveMode();
+    rdcp_callback_radio_failure("TX start");
+    return false;
+  }
   return true;
 }
 
 void lora_radio_startcad(uint8_t channel)
 {
   serial_writeln("INFO: Starting LoRa Channel Activity Detection");
-  digitalWrite(TDECK_TFT_CS, HIGH);
-  delay(1);
-  digitalWrite(TDECK_RADIO_CS, LOW);
-  delay(1);
-
-  radio_switch_channel(channel); // enforced
-  delay(1);
-	Radio.Standby();
-  delay(1);
-
-  if (channel == CHANNEL868DA)
+  radio_switch_channel(channel);
+  if (!radio_initialized || (current_channel != channel))
   {
-	  Radio.SetCadParams(LORA_CAD_08_SYMBOL, getMyLoRaSpreadingFactor() + 13, 10, LORA_CAD_ONLY, 0);
-	  //Radio.SetCadParams(LORA_CAD_08_SYMBOL, getMyLoRaSpreadingFactor() + 13, 10, LORA_CAD_RX, 0);
+    rdcp_callback_radio_failure("CAD channel setup");
+    return;
   }
-  else 
+
+  RadioChannelConfig config = get_channel_config(channel);
+  ChannelScanConfig_t cad_config;
+  cad_config.cad.symNum = RADIOLIB_SX126X_CAD_ON_8_SYMB;
+  cad_config.cad.detPeak = config.spreading_factor + 13;
+  cad_config.cad.detMin = 10;
+  cad_config.cad.exitMode = RADIOLIB_SX126X_CAD_GOTO_STDBY;
+  cad_config.cad.timeout = 0;
+  cad_config.cad.irqFlags = RADIOLIB_IRQ_CAD_DEFAULT_FLAGS;
+  cad_config.cad.irqMask = RADIOLIB_IRQ_CAD_DEFAULT_MASK;
+
+  prepare_radio_operation(RADIO_OPERATION_CAD);
+  tdeck_spi_lock();
+  int16_t state = radio.startChannelScan(cad_config);
+  tdeck_spi_unlock();
+
+  if (state != RADIOLIB_ERR_NONE)
   {
-	  Radio.SetCadParams(LORA_CAD_08_SYMBOL, getMyLoRaSpreadingFactorTX() + 13, 10, LORA_CAD_ONLY, 0);
-	  //Radio.SetCadParams(LORA_CAD_08_SYMBOL, getMyLoRaSpreadingFactorTX() + 13, 10, LORA_CAD_RX, 0);
+    prepare_radio_operation(RADIO_OPERATION_NONE);
+    log_radiolib_error("startChannelScan", state);
+    startReceiveMode();
+    rdcp_callback_radio_failure("CAD start");
   }
-  delay(1);
-	Radio.StartCad();
-  return;
 }
 
 void lora_radio_receivemode(void)
 {
   startReceiveMode();
-  return;
 }
 
 bool lora_has_new_message(void)
@@ -424,77 +469,9 @@ uint16_t lora_copy_received_message(uint8_t *destination)
   return receive_buffer_length;
 }
 
-/*
- * Callback on TX done (outgoing LoRa packet was sent)
- */
-void OnTxDone(void)
-{
-  tx_finished = true;
-  tx_wallclock_time = timeNow() - tx_time;
-	return;
-}
-
-/*
- * Callback on RX done (reception of new LoRa packet)
- */
-void OnRxDone(uint8_t *payload, uint16_t size, int16_t rssi, int8_t snr)
-{
-  uint16_t size_to_copy = size;
-  if (size > RDCP_MAX_PAYLOAD_SIZE_LORA) size_to_copy = RDCP_MAX_PAYLOAD_SIZE_LORA;
-
-  has_received_message = true;
-
-  receive_buffer_length = size_to_copy;
-  receive_rssi = rssi;
-  receive_snr = snr;
-
-  memcpy(receive_buffer, payload, size_to_copy);
-  rx_timestamp = timeNow();
-
-	return;
-}
-
 int64_t lora_get_rx_timestamp(void)
 {
   return rx_timestamp;
-}
-
-/*
- * Callback on TX Timeout event
- */
-void OnTxTimeout(void)
-{
-  has_timeout_tx = true;
-	return;
-}
-
-/*
- * Callback on RX Timeout event
- */
-void OnRxTimeout(void)
-{
-  has_timeout_rx = true;
-	return;
-}
-
-/*
- * Callback on RX Error event
- */
-void OnRxError(void)
-{
-  has_error_rx = true;
-	return;
-}
-
-/*
- * Callback on Channel Activity Detection
- */
-void OnCadDone(bool cadResult)
-{
-	cad_repeat++;
-  new_cad_result_available = true;
-  new_cad_result_busy = cadResult;
-  return;
 }
 
 /* EOF */

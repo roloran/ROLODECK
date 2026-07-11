@@ -49,6 +49,18 @@ void check_screensaver_activation(void);
 void tdeck_setup(void);
 
 /**
+ * Acquire exclusive access to the shared display/radio/SD SPI bus.
+ * All chip-select lines are deasserted before this function returns.
+ */
+void tdeck_spi_lock(void);
+
+/**
+ * Release exclusive access to the shared display/radio/SD SPI bus.
+ * All chip-select lines are deasserted before the lock is released.
+ */
+void tdeck_spi_unlock(void);
+
+/**
  * Must be called periodically to update the GUI
  */
 void tdeck_loop(void);

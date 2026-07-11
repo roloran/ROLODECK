@@ -94,16 +94,12 @@ void serial_banner(void)
   return;
 }
 
-extern SemaphoreHandle_t highlander;
-
 bool serial_write(String s, bool use_prefix)
 {
   if (pre_banner_mode) return false;
   if (MY_SERIAL_MODE != SERIAL_MODE_SILENT)
   {
-    if (highlander) xSemaphoreTake(highlander, portMAX_DELAY); // ! may be nested call !
-    digitalWrite(TDECK_TFT_CS, HIGH);
-    delay(1);
+    tdeck_spi_lock();
     if (use_prefix == true)
     {
       Serial.print(SERIAL_NOTE + SERIAL_PREFIX + s);
@@ -121,7 +117,7 @@ bool serial_write(String s, bool use_prefix)
       }
     }
     Serial.flush();
-    if (highlander) xSemaphoreGive(highlander);
+    tdeck_spi_unlock();
     return true;
   }
   return false;
@@ -1054,7 +1050,8 @@ void serial_process_command(String s, String processing_mode, bool persist_selec
     else if (s_uppercase.startsWith("IDENTIFICATION"))
     {
       char output[DATABUFLEN];
-      snprintf(output, DATABUFLEN, "INFO: RDCP Address: %04X\n", getMyRDCPAddress());
+      snprintf(output, DATABUFLEN, "INFO: RDCP Address: %04X, RadioLib SX1262: %s\n",
+               getMyRDCPAddress(), radio_is_initialized() ? "ready" : "not ready");
       Serial.print(output);
     }
     else

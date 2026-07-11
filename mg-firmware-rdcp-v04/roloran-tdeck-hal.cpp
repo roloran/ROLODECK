@@ -73,16 +73,28 @@ bool is_screensaver_on(void) { return tdeck_screensaver_is_on; }
 
 static void tdeck_display_lock(void)
 {
-  if (highlander) xSemaphoreTake(highlander, portMAX_DELAY);
-  digitalWrite(TDECK_RADIO_CS, HIGH);
-  digitalWrite(TDECK_TFT_CS, HIGH);
-  delay(1);
+  tdeck_spi_lock();
 }
 
 static void tdeck_display_unlock(void)
 {
   digitalWrite(TDECK_TFT_CS, HIGH);
-  delay(1);
+  tdeck_spi_unlock();
+}
+
+void tdeck_spi_lock(void)
+{
+  if (highlander) xSemaphoreTake(highlander, portMAX_DELAY);
+  digitalWrite(TDECK_SDCARD_CS, HIGH);
+  digitalWrite(TDECK_RADIO_CS, HIGH);
+  digitalWrite(TDECK_TFT_CS, HIGH);
+}
+
+void tdeck_spi_unlock(void)
+{
+  digitalWrite(TDECK_SDCARD_CS, HIGH);
+  digitalWrite(TDECK_RADIO_CS, HIGH);
+  digitalWrite(TDECK_TFT_CS, HIGH);
   if (highlander) xSemaphoreGive(highlander);
 }
 
@@ -391,19 +403,16 @@ void my_disp_flush(lv_disp_drv_t *disp, const lv_area_t *area, lv_color_t *color
   uint32_t w = (area->x2 - area->x1 + 1);
   uint32_t h = (area->y2 - area->y1 + 1);
 
-  if (highlander) xSemaphoreTake(highlander, portMAX_DELAY);
-  digitalWrite(TDECK_RADIO_CS, HIGH);
+  tdeck_spi_lock();
   digitalWrite(TDECK_TFT_CS, LOW);
-  delay(1);
 #if (LV_COLOR_16_SWAP != 0)
   gfx->draw16bitBeRGBBitmap(area->x1, area->y1, (uint16_t *)&color_p->full, w, h);
 #else
   gfx->draw16bitRGBBitmap(area->x1, area->y1, (uint16_t *)&color_p->full, w, h);
 #endif
   digitalWrite(TDECK_TFT_CS, HIGH);
-  delay(1);
   lv_disp_flush_ready(disp);
-  if (highlander) xSemaphoreGive(highlander);
+  tdeck_spi_unlock();
   return;
 }
 
@@ -741,16 +750,17 @@ void tdeck_setup(void)
 
 void tdeck_re_init_spi(void)
 {
-  if (highlander) xSemaphoreTake(highlander, portMAX_DELAY);
+  bool gfx_begin_succeeded;
+  tdeck_spi_lock();
   GFX_EXTRA_PRE_INIT();
   SPI.end();
   SPI.begin(TDECK_SPI_SCK, TDECK_SPI_MISO, TDECK_SPI_MOSI);
-  if (!gfx->begin()) serial_writeln("ERROR: gfx begin failed during re-init");
+  gfx_begin_succeeded = gfx->begin();
   gfx->fillScreen(BLACK);
   gfx->invertDisplay(true);
-  if (highlander) xSemaphoreGive(highlander);
+  tdeck_spi_unlock();
+  if (!gfx_begin_succeeded) serial_writeln("ERROR: gfx begin failed during re-init");
   radio_setup();
-  startReceiveMode();
   return;
 }
 
@@ -758,31 +768,17 @@ void tdeck_re_init_spi(void)
 
 void tdeck_loop()
 {
-  uint16_t wait_counter = 0;
-
-  /* Wait for SX126x background task to finish */
-  while (digitalRead(TDECK_RADIO_CS) == LOW)
-  {
-    wait_counter++;
-    if (wait_counter > 5)
-    {
-      serial_writeln("WARNING: Potential SPI Interface deadlock - busy with radio CS");
-      wait_counter = 0;
-    }
-    delay(1);
-  }
-
   int cpu = get_cpufreq();
   cpu_high();
 
   if (tdeck_display_is_on)
   {
-    if (highlander) xSemaphoreTake(highlander, portMAX_DELAY);
+    tdeck_spi_lock();
     gfx->drawPixel(0, 0, 7);
     gfx->drawPixel(screenWidth-1, 0, 7);
     gfx->drawPixel(0, screenHeight-1, 7);
     gfx->drawPixel(screenWidth-1, screenHeight-1, 7);
-    if (highlander) xSemaphoreGive(highlander);
+    tdeck_spi_unlock();
   }
 
   lv_timer_handler();

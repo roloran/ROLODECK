@@ -13,41 +13,16 @@
 void startReceiveMode(void);
 
 /**
- * LoRa Radio Callback on "TX finished". Used internally. 
- */
-void OnTxDone(void);
-
-/**
- * LoRa Radio Callback on "RX finished". Used internally. 
- */
-void OnRxDone(uint8_t *payload, uint16_t size, int16_t rssi, int8_t snr);
-
-/**
- * LoRa Radio Callback on "TX timeout". Used internally. 
- */
-void OnTxTimeout(void);
-
-/**
- * LoRa Radio Callback on "RX timeout". Used internally. 
- */
-void OnRxTimeout(void);
-
-/**
- * LoRa Radio Callback on "RX error". Used internally. 
- */
-void OnRxError(void);
-
-/**
- * LoRa Radio Callback when Channel Activity Detection has a positive or negative result.
- * Used internally. 
- */
-void OnCadDone(bool cadResult);
-
-/**
  * Fully initialize the LoRa radio with the current settings.
  * To be used during device power-on, usually from the main setup() function. 
  */
 void radio_setup(void);
+
+/**
+ * Report whether RadioLib initialized the SX1262 and entered receive mode.
+ * @return true when the radio is ready, false after an initialization error
+ */
+bool radio_is_initialized(void);
 
 /**
  * Fully re-initialize the LoRa radio after configuration change
@@ -66,15 +41,6 @@ void radio_apply_new_configuration(void);
 void radio_loop();
 
 /**
- * Prepare a LoRa packet for immediate (ASAP) sending.
- * The parameter is a full TX string ("TX [Base64 encoded]").
- * As this function bypasses the TX scheduling system,
- * it should not be used unless you know what you are doing. :-) 
- * @param txstring Arduino String, Base64-encoded, with LoRa packet payload
- */
-void lora_send_now_base64(String txstring);
-
-/**
  * Check whether a new LoRa packet was received meanwhile.
  * @return true if a new LoRa packet is available, false otherwise
  */
@@ -90,7 +56,7 @@ uint16_t lora_copy_received_message(uint8_t *destination);
 
 /**
  * Get the timestamp of the most recently received LoRa packet. 
- * @return Timestamp as in my_millis() of when the RX callback was executed for the LoRa packet
+ * @return Timestamp as in my_millis() of when the DIO1 RX interrupt occurred
  */
 int64_t lora_get_rx_timestamp(void);
 
@@ -117,11 +83,11 @@ void lora_radio_receivemode(void);
 
 /**
  * Return the RSSI value for the most recently received LoRa packet
- * as provided by the underlying LoRa / SX1262 hardware library. 
+ * as provided by RadioLib.
  * @return int16_t RSSI value
  */
 int16_t getReceiveRSSI(void);
-uint8_t getReceiveSNR(void);
+int8_t getReceiveSNR(void);
 
 /**
  * Return the most recently received LoRa packet / RDCP message as Base64-encoded string. 
